@@ -1,7 +1,7 @@
 "use client";
 
-import { GarageConfig, RoofType, WallFace, GarageElement, TextureFinish } from '@/types';
-import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, AlertCircle } from 'lucide-react';
+import { GarageConfig, RoofType, WallFace, GarageElement, TextureFinish, CorrugationPattern, GateType } from '@/types';
+import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -18,7 +18,13 @@ const ROOF_TYPES: { type: RoofType; label: string }[] = [
   { type: 'slope-back', label: 'Spad w tył' },
   { type: 'slope-left', label: 'Spad w lewo' },
   { type: 'slope-right', label: 'Spad w prawo' },
-  { type: 'front-dual-slope', label: 'Dwuspad. na bramę' },
+];
+
+const CORRUGATION_PATTERNS: { type: CorrugationPattern; label: string }[] = [
+  { type: 'vertical-t7', label: 'Pionowe T-7' },
+  { type: 'horizontal-t7', label: 'Poziome T-7' },
+  { type: 'vertical-t14', label: 'Pionowe T-14' },
+  { type: 'horizontal-t14', label: 'Poziome T-14' },
 ];
 
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall }: ConfigPanelProps) {
@@ -27,24 +33,25 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     setConfig(prev => ({ ...prev, [key]: value }));
   };
 
-  const addElement = (type: 'gate' | 'door' | 'window') => {
+  const addElement = (type: GarageElement['type'], wall: WallFace = selectedWall) => {
     let width = 100;
     let height = 200;
     if (type === 'gate') { width = 250; height = 200; }
-    if (type === 'window') { width = 100; height = 60; }
+    if (type === 'window' || type === 'pvc-window') { width = 100; height = 60; }
+    if (type === 'skylight') { width = 100; height = 30; }
 
-    const wallWidth = selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length;
+    const wallWidth = wall === 'front' || wall === 'back' ? config.width : config.length;
 
     const newElement: GarageElement = {
       id: uuidv4(),
       type,
-      wall: selectedWall,
+      wall,
       x: 0,
-      y: type === 'window' ? 120 : 0,
+      y: type === 'window' || type === 'pvc-window' ? 120 : (type === 'skylight' ? config.height - 40 : 0),
       width,
       height,
       gateType: type === 'gate' ? 'up-and-over' : undefined,
-      paneCount: type === 'window' ? 2 : undefined,
+      clearanceHeight: type === 'gate' ? 190 : undefined,
     };
 
     const validPos = findValidPosition(newElement, config.elements, wallWidth, config.height);
@@ -53,6 +60,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       newElement.x = validPos.x;
       newElement.y = validPos.y;
       setConfig(prev => ({ ...prev, elements: [...prev.elements, newElement] }));
+      setSelectedWall(wall); // switch to the wall where element was added
     } else {
       alert("Brak miejsca na tej ścianie na nowy element!");
     }
@@ -63,18 +71,15 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       const newElements = prev.elements.map(el => {
         if (el.id === id) {
           const updated = { ...el, ...updates };
-          // Enforce collision on move/resize (simplified check: if moving, check collision)
           const wallWidth = updated.wall === 'front' || updated.wall === 'back' ? prev.width : prev.length;
           const pos = findValidPosition(updated, prev.elements, wallWidth, prev.height);
+          
           if (!pos && (updates.x !== undefined || updates.y !== undefined || updates.width !== undefined)) {
-            // Revert movement if invalid
             return el; 
           }
           if (pos && (updates.x !== undefined || updates.y !== undefined)) {
-             // Snap to valid if needed, but for smooth slider, we usually reject or limit. 
-             // To keep UI simple, we just allow the update if it's strictly valid, otherwise revert.
              if (pos.x !== updated.x || pos.y !== updated.y) {
-               return el; // collision detected, don't update
+               return el; 
              }
           }
           return updated;
@@ -88,6 +93,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const removeElement = (id: string) => {
     setConfig(prev => ({ ...prev, elements: prev.elements.filter(e => e.id !== id) }));
   };
+
+  const gates = config.elements.filter(e => e.type === 'gate');
 
   return (
     <div className="space-y-6 pb-12">
@@ -113,9 +120,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             </button>
           ))}
         </div>
-        
         <div className="mt-4 pt-4 border-t border-zinc-200 flex items-center justify-between">
-          <span className="font-medium text-sm text-zinc-700">Rynny (Orynnowanie)</span>
+          <span className="font-medium text-sm text-zinc-700">Rynny i Rury Spadowe</span>
           <label className="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" checked={config.gutters} onChange={(e) => updateConfig('gutters', e.target.checked)} className="sr-only peer" />
             <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
@@ -154,16 +160,79 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </section>
 
-      {/* 3. ELEMENTY KONSTRUKCYJNE */}
+      {/* 3. PARAMETRY BRAM */}
       <section className="bg-zinc-50 p-5 rounded-2xl border border-zinc-100 shadow-sm">
         <h2 className="flex items-center gap-2 font-bold text-lg mb-4 text-zinc-900 border-b border-zinc-200 pb-2">
           <BoxSelect size={20} className="text-red-600" />
-          Elementy Konstrukcyjne
+          Parametry Bram
         </h2>
-
-        {/* Wall Selector */}
         <div className="mb-4">
-          <label className="text-sm font-medium text-zinc-700 block mb-2">Wybierz ścianę do edycji:</label>
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-sm font-medium text-zinc-700">Ilość bram (przód)</span>
+            <div className="flex gap-2 bg-white rounded-lg border border-zinc-200 p-1">
+              <button onClick={() => { if (gates.length === 2) removeElement(gates[1].id); if (gates.length === 0) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 1 ? 'bg-zinc-100 font-bold' : ''}`}>1</button>
+              <button onClick={() => { if (gates.length < 2) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 2 ? 'bg-zinc-100 font-bold' : ''}`}>2</button>
+            </div>
+          </div>
+        </div>
+
+        {gates.map((gate, i) => (
+          <div key={gate.id} className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-3">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold text-zinc-800">Brama #{i+1}</h3>
+              <select 
+                value={gate.gateType} 
+                onChange={(e) => {
+                  setSelectedWall('front'); // Focus camera
+                  updateElement(gate.id, { gateType: e.target.value as GateType })
+                }}
+                className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50"
+              >
+                <option value="up-and-over">Uchylna</option>
+                <option value="swing">Dwuskrzydłowa</option>
+                <option value="sectional">Segmentowa</option>
+              </select>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-3">
+              <div>
+                <label className="text-xs text-zinc-500">Szerokość</label>
+                <input type="number" value={gate.width} onChange={(e) => updateElement(gate.id, { width: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500">Światło wjazdu (Wys)</label>
+                <input type="number" value={gate.clearanceHeight} onChange={(e) => updateElement(gate.id, { clearanceHeight: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                <span>Pozycja X</span>
+                <span>{gate.x} cm</span>
+              </div>
+              <input 
+                type="range" 
+                min={-(config.width / 2) + gate.width/2} 
+                max={(config.width / 2) - gate.width/2} 
+                step={5} 
+                value={gate.x} 
+                onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })}
+                className="w-full accent-zinc-800" 
+              />
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* 4. DODATKI KONSTRUKCYJNE */}
+      <section className="bg-zinc-50 p-5 rounded-2xl border border-zinc-100 shadow-sm">
+        <h2 className="flex items-center gap-2 font-bold text-lg mb-4 text-zinc-900 border-b border-zinc-200 pb-2">
+          <Layers size={20} className="text-red-600" />
+          Dodatki Konstrukcyjne
+        </h2>
+        
+        <div className="mb-4">
+          <label className="text-sm font-medium text-zinc-700 block mb-2">Edytuj ścianę:</label>
           <div className="flex gap-2">
             {(['front', 'back', 'left', 'right'] as WallFace[]).map(wall => (
               <button
@@ -179,27 +248,37 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           </div>
         </div>
 
-        {/* Element List for Selected Wall */}
-        <div className="space-y-3 mb-4">
-          {config.elements.filter(e => e.wall === selectedWall).length === 0 ? (
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2 custom-scrollbar">
+          <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-red-600 hover:text-red-600">
+            <Plus size={16} /> Drzwi
+          </button>
+          <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-red-600 hover:text-red-600">
+            <Plus size={16} /> Okno Std
+          </button>
+          <button onClick={() => addElement('pvc-window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-red-600 hover:text-red-600">
+            <Plus size={16} /> Okno PCV
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (
             <div className="text-sm text-zinc-400 text-center py-4 bg-white border border-dashed rounded-lg">
-              Brak elementów na tej ścianie.
+              Brak dodatków na tej ścianie.
             </div>
           ) : (
-            config.elements.filter(e => e.wall === selectedWall).map((el, idx) => (
+            config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').map((el, idx) => (
               <div key={el.id} className="bg-white p-3 rounded-xl border border-zinc-200 shadow-sm relative group">
                 <button onClick={() => removeElement(el.id)} className="absolute top-3 right-3 text-red-400 hover:text-red-600 transition-colors">
                   <Trash2 size={16} />
                 </button>
                 <h3 className="font-semibold text-zinc-800 mb-3 capitalize">
-                  {el.type === 'gate' ? 'Brama' : el.type === 'door' ? 'Drzwi' : 'Okno'} #{idx + 1}
+                  {el.type === 'door' ? 'Drzwi' : el.type === 'window' ? 'Okno Std' : 'Okno PCV'} #{idx + 1}
                 </h3>
                 
-                {/* Sliders for Position */}
                 <div className="space-y-3">
                   <div>
                     <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                      <span>Pozycja X (od środka)</span>
+                      <span>Pozycja X</span>
                       <span>{el.x} cm</span>
                     </div>
                     <input 
@@ -212,58 +291,49 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                       className="w-full accent-zinc-800" 
                     />
                   </div>
-                  {el.type === 'window' && (
-                    <div>
-                      <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                        <span>Pozycja Y (od ziemi)</span>
-                        <span>{el.y} cm</span>
-                      </div>
-                      <input 
-                        type="range" min={0} max={config.height - el.height} step={5} 
-                        value={el.y} onChange={(e) => updateElement(el.id, { y: Number(e.target.value) })}
-                        className="w-full accent-zinc-800" 
-                      />
-                    </div>
-                  )}
                 </div>
               </div>
             ))
           )}
         </div>
-
-        {/* Add Buttons */}
-        <div className="flex gap-2">
-          <button onClick={() => addElement('gate')} className="flex-1 bg-white border border-zinc-300 text-zinc-700 py-2 rounded-lg text-sm font-medium flex justify-center items-center gap-1 hover:border-red-600 hover:text-red-600 transition-colors">
-            <Plus size={16} /> Brama
-          </button>
-          <button onClick={() => addElement('door')} className="flex-1 bg-white border border-zinc-300 text-zinc-700 py-2 rounded-lg text-sm font-medium flex justify-center items-center gap-1 hover:border-red-600 hover:text-red-600 transition-colors">
-            <Plus size={16} /> Drzwi
-          </button>
-          <button onClick={() => addElement('window')} className="flex-1 bg-white border border-zinc-300 text-zinc-700 py-2 rounded-lg text-sm font-medium flex justify-center items-center gap-1 hover:border-red-600 hover:text-red-600 transition-colors">
-            <Plus size={16} /> Okno
-          </button>
-        </div>
       </section>
 
-      {/* 4. WYKOŃCZENIE I KOLORY */}
+      {/* 5. PRZETŁOCZENIA I KOLORY */}
       <section className="bg-zinc-50 p-5 rounded-2xl border border-zinc-100 shadow-sm">
         <h2 className="flex items-center gap-2 font-bold text-lg mb-4 text-zinc-900 border-b border-zinc-200 pb-2">
           <PaintBucket size={20} className="text-red-600" />
-          Wykończenie i Kolory
+          Wykończenie i Przetłoczenia
         </h2>
+
+        <div className="mb-5">
+          <span className="text-sm font-medium text-zinc-700 mb-2 block">Rodzaj przetłoczeń blachy</span>
+          <div className="grid grid-cols-2 gap-2">
+            {CORRUGATION_PATTERNS.map(pattern => (
+              <button
+                key={pattern.type}
+                onClick={() => updateConfig('corrugationPattern', pattern.type)}
+                className={`p-2 text-xs font-medium border rounded-lg transition-all ${
+                  config.corrugationPattern === pattern.type ? 'border-red-600 bg-red-50 text-red-700' : 'border-zinc-200 bg-white hover:border-zinc-300'
+                }`}
+              >
+                {pattern.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="mb-5">
           <span className="text-sm font-medium text-zinc-700 mb-2 block">Rodzaj Poszycia</span>
           <div className="flex gap-3">
             <button 
               onClick={() => updateConfig('finish', 'standard')}
-              className={`flex-1 p-3 border rounded-xl font-medium text-sm transition-all ${config.finish === 'standard' ? 'border-red-600 bg-red-50 text-red-700' : 'border-zinc-200 bg-white'}`}
+              className={`flex-1 p-2 border rounded-xl font-medium text-xs transition-all ${config.finish === 'standard' ? 'border-red-600 bg-red-50 text-red-700' : 'border-zinc-200 bg-white'}`}
             >
               Blacha standardowa
             </button>
             <button 
               onClick={() => updateConfig('finish', 'golden-oak')}
-              className={`flex-1 p-3 border rounded-xl font-medium text-sm transition-all ${config.finish === 'golden-oak' ? 'border-red-600 bg-red-50 text-red-700' : 'border-zinc-200 bg-white'}`}
+              className={`flex-1 p-2 border rounded-xl font-medium text-xs transition-all ${config.finish === 'golden-oak' ? 'border-red-600 bg-red-50 text-red-700' : 'border-zinc-200 bg-white'}`}
             >
               Złoty dąb (Premium)
             </button>

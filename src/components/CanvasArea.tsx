@@ -1,11 +1,10 @@
 "use client";
 
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, ContactShadows, Environment } from '@react-three/drei';
+import { Canvas, useThree } from '@react-three/fiber';
+import { CameraControls, ContactShadows, Environment } from '@react-three/drei';
 import { GarageConfig, WallFace } from '@/types';
 import GarageModel from './GarageModel';
 import { Suspense, useEffect, useRef } from 'react';
-import * as THREE from 'three';
 
 interface CanvasAreaProps {
   config: GarageConfig;
@@ -13,7 +12,6 @@ interface CanvasAreaProps {
 }
 
 function CameraRig({ selectedWall, config }: { selectedWall: WallFace; config: GarageConfig }) {
-  const { camera } = useThree();
   const controlsRef = useRef<any>(null);
 
   useEffect(() => {
@@ -23,14 +21,12 @@ function CameraRig({ selectedWall, config }: { selectedWall: WallFace; config: G
     const l = config.length * 0.01;
     const h = config.height * 0.01;
     
-    // Determine target position (center of the wall)
     let targetX = 0;
     let targetZ = 0;
     
-    // Determine camera position (in front of the wall)
     let camX = 0;
     let camZ = 0;
-    const dist = Math.max(w, l) + 3;
+    const dist = Math.max(w, l) + 4;
 
     switch (selectedWall) {
       case 'front':
@@ -51,40 +47,18 @@ function CameraRig({ selectedWall, config }: { selectedWall: WallFace; config: G
         break;
     }
 
-    // Animate to new position
-    const startPos = camera.position.clone();
-    const endPos = new THREE.Vector3(camX, h / 2 + 1, camZ);
+    // Smoothly transition camera
+    controlsRef.current.setLookAt(camX, h / 2 + 1, camZ, targetX, h / 2, targetZ, true);
     
-    const startTarget = controlsRef.current.target.clone();
-    const endTarget = new THREE.Vector3(targetX, h / 2, targetZ);
-
-    let t = 0;
-    const animate = () => {
-      t += 0.05;
-      if (t > 1) t = 1;
-      
-      // Easing function
-      const ease = 1 - Math.pow(1 - t, 3);
-      
-      camera.position.lerpVectors(startPos, endPos, ease);
-      controlsRef.current.target.lerpVectors(startTarget, endTarget, ease);
-      controlsRef.current.update();
-
-      if (t < 1) requestAnimationFrame(animate);
-    };
-    
-    animate();
-    
-  }, [selectedWall, config.width, config.length, config.height, camera]);
+  }, [selectedWall, config.width, config.length, config.height]);
 
   return (
-    <OrbitControls
+    <CameraControls
       ref={controlsRef}
       minPolarAngle={Math.PI / 8}
       maxPolarAngle={Math.PI / 2 - 0.05}
-      enablePan={true}
       minDistance={3}
-      maxDistance={20}
+      maxDistance={25}
       makeDefault
     />
   );
@@ -108,6 +82,8 @@ export default function CanvasArea({ config, selectedWall }: CanvasAreaProps) {
         shadow-mapSize-height={2048}
         shadow-bias={-0.0001}
       />
+      
+      {/* Studio / City Environment for realistic metallic reflections */}
       <Environment preset="city" />
 
       <Suspense fallback={null}>
@@ -116,15 +92,16 @@ export default function CanvasArea({ config, selectedWall }: CanvasAreaProps) {
 
       <ContactShadows
         position={[0, -0.01, 0]}
-        opacity={0.7}
-        scale={25}
+        opacity={0.8}
+        scale={30}
         blur={2}
         far={5}
       />
       
+      {/* Subtle backdrop plane */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.02, 0]}>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#27272a" roughness={1} />
+        <planeGeometry args={[150, 150]} />
+        <meshStandardMaterial color="#222225" roughness={1} />
       </mesh>
 
       <CameraRig selectedWall={selectedWall} config={config} />

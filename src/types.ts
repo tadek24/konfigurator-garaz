@@ -3,12 +3,13 @@ export type RoofType =
   | 'slope-front'
   | 'slope-back'
   | 'slope-left'
-  | 'slope-right'
-  | 'front-dual-slope';
+  | 'slope-right';
 
 export type WallFace = 'front' | 'back' | 'left' | 'right';
-export type ElementType = 'gate' | 'door' | 'window';
+export type ElementType = 'gate' | 'door' | 'window' | 'pvc-window' | 'skylight';
 export type TextureFinish = 'standard' | 'golden-oak';
+export type CorrugationPattern = 'vertical-t7' | 'horizontal-t7' | 'vertical-t14' | 'horizontal-t14';
+export type GateType = 'swing' | 'up-and-over' | 'sectional';
 
 export interface GarageElement {
   id: string;
@@ -19,7 +20,8 @@ export interface GarageElement {
   width: number; // in cm
   height: number; // in cm
   // Specifics
-  gateType?: 'swing' | 'up-and-over';
+  gateType?: GateType;
+  clearanceHeight?: number; // for gates
   paneCount?: number; // for windows
 }
 
@@ -32,6 +34,7 @@ export interface GarageConfig {
   wallColor: string;
   doorColor: string;
   finish: TextureFinish;
+  corrugationPattern: CorrugationPattern;
   gutters: boolean;
   elements: GarageElement[];
 }
