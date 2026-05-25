@@ -93,15 +93,21 @@ export default function CanvasArea({ config, selectedWall }: CanvasAreaProps) {
       <ContactShadows
         position={[0, -0.01, 0]}
         opacity={0.8}
-        scale={30}
+        scale={40}
         blur={2}
         far={5}
       />
       
-      {/* Subtle backdrop plane */}
+      {/* Concrete Driveway / Floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.02, 0]}>
-        <planeGeometry args={[150, 150]} />
-        <meshStandardMaterial color="#222225" roughness={1} />
+        <planeGeometry args={[200, 200]} />
+        <meshStandardMaterial color="#3a3a3a" roughness={0.9} metalness={0.1} />
+      </mesh>
+      
+      {/* Distant Ground Context */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.05, 0]}>
+        <planeGeometry args={[1000, 1000]} />
+        <meshStandardMaterial color="#1f1f22" roughness={1} />
       </mesh>
 
       <CameraRig selectedWall={selectedWall} config={config} />

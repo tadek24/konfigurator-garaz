@@ -276,6 +276,16 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 </h3>
                 
                 <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs text-zinc-500">Szerokość</label>
+                      <input type="number" value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500">Wysokość</label>
+                      <input type="number" value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" />
+                    </div>
+                  </div>
                   <div>
                     <div className="flex justify-between text-xs text-zinc-500 mb-1">
                       <span>Pozycja X</span>
@@ -288,6 +298,21 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                       step={5} 
                       value={el.x} 
                       onChange={(e) => updateElement(el.id, { x: Number(e.target.value) })}
+                      className="w-full accent-zinc-800" 
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                      <span>Pozycja Y (od ziemi)</span>
+                      <span>{el.y} cm</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min={0} 
+                      max={config.height - el.height} 
+                      step={5} 
+                      value={el.y} 
+                      onChange={(e) => updateElement(el.id, { y: Number(e.target.value) })}
                       className="w-full accent-zinc-800" 
                     />
                   </div>

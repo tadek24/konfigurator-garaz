@@ -62,7 +62,7 @@ function createWoodTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-function AnimatedGate({ el, config, doorMat }: { el: GarageElement, config: GarageConfig, doorMat: ReactNode }) {
+function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement, config: GarageConfig, doorMat: ReactNode, garageHeight: number }) {
   const ref = useRef<THREE.Group>(null);
   
   const elW = el.width * 0.01;
@@ -83,18 +83,19 @@ function AnimatedGate({ el, config, doorMat }: { el: GarageElement, config: Gara
         rightDoor.rotation.y = -phase * (Math.PI / 2);
       }
     } else if (el.gateType === 'up-and-over') {
-      const door = ref.current.children[0];
-      if (door) {
-        // Rotate up and slide back slightly
-        door.rotation.x = -phase * (Math.PI / 2 - 0.1);
-        door.position.y = phase * (elH / 4);
-        door.position.z = -phase * (elH / 2);
+      const pivot = ref.current.children[0];
+      if (pivot) {
+        // Rotate up from the top pivot
+        pivot.rotation.x = phase * (Math.PI / 2 - 0.1);
       }
     } else if (el.gateType === 'sectional') {
-      // Simplification: slide up
       const door = ref.current.children[0];
       if (door) {
-        door.position.y = phase * elH;
+        const h = garageHeight * 0.01;
+        const elY = el.y * 0.01;
+        // Clamp so it never moves above roofline
+        const maxUp = Math.max(0, Math.min(elH, h - elY - elH));
+        door.position.y = phase * maxUp;
       }
     }
   });
@@ -120,20 +121,37 @@ function AnimatedGate({ el, config, doorMat }: { el: GarageElement, config: Gara
     );
   }
 
-  // Tilt and Sectional
+  // Tilt Gate
+  if (el.gateType === 'up-and-over') {
+    return (
+      <group ref={ref} position={[el.x * 0.01, el.y * 0.01, 0]}>
+        {/* Pivot group at the very top of the door */}
+        <group position={[0, elH, 0]}>
+          <mesh position={[0, -elH / 2, 0]}>
+            <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
+            {doorMat}
+          </mesh>
+        </group>
+      </group>
+    );
+  }
+
+  // Sectional
   return (
     <group ref={ref} position={[el.x * 0.01, el.y * 0.01, 0]}>
-      <mesh position={[0, elH / 2, 0]}>
-        <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
-        {doorMat}
-        {/* Decorative horizontal lines to indicate sections */}
-        {[...Array(4)].map((_, i) => (
-          <mesh key={i} position={[0, (elH / 5) * (i - 1.5), t / 2 + 0.01]}>
-            <boxGeometry args={[elW - 0.04, 0.02, 0.01]} />
-            <meshStandardMaterial color="#000000" opacity={0.3} transparent />
-          </mesh>
-        ))}
-      </mesh>
+      <group position={[0, 0, 0]}>
+        <mesh position={[0, elH / 2, 0]}>
+          <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
+          {doorMat}
+          {/* Decorative horizontal lines to indicate sections */}
+          {[...Array(4)].map((_, i) => (
+            <mesh key={i} position={[0, (elH / 5) * (i - 1.5), t / 2 + 0.01]}>
+              <boxGeometry args={[elW - 0.04, 0.02, 0.01]} />
+              <meshStandardMaterial color="#000000" opacity={0.3} transparent />
+            </mesh>
+          ))}
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -149,8 +167,8 @@ export default function GarageModel({ config }: GarageModelProps) {
   const woodTex = useMemo(() => createWoodTexture(), []);
 
   const baseMaterialProps = {
-    roughness: config.finish === 'golden-oak' ? 0.7 : 0.4,
-    metalness: config.finish === 'golden-oak' ? 0.1 : 0.8,
+    roughness: config.finish === 'golden-oak' ? 0.5 : 0.2,
+    metalness: config.finish === 'golden-oak' ? 0.2 : 0.85,
     map: config.finish === 'golden-oak' ? woodTex : null,
     bumpMap: config.finish === 'standard' ? bumpMap : null,
     bumpScale: 0.015,
@@ -230,7 +248,7 @@ export default function GarageModel({ config }: GarageModelProps) {
               </group>
             );
           } else if (el.type === 'gate') {
-            return <AnimatedGate key={el.id} el={el} config={config} doorMat={doorMat} />;
+            return <AnimatedGate key={el.id} el={el} config={config} doorMat={doorMat} garageHeight={config.height} />;
           } else {
             return (
               <mesh key={el.id} position={[el.x * 0.01, elY + elH / 2, t / 2]}>
