@@ -306,13 +306,14 @@ export default function GarageModel({ config }: GarageModelProps) {
 
     if (rT === 'dual-slope') {
       const roofShape = new THREE.Shape();
-      roofShape.moveTo(-rW / 2, 0);
-      roofShape.lineTo(0, slopeH + 0.02);
-      roofShape.lineTo(rW / 2, 0);
-      roofShape.lineTo(rW / 2, -t);
-      roofShape.lineTo(0, slopeH - t);
-      roofShape.lineTo(-rW / 2, -t);
-      roofShape.lineTo(-rW / 2, 0);
+      // Start at left outer edge, sitting perfectly flush on wall height `h`.
+      roofShape.moveTo(-rW / 2, 0); 
+      roofShape.lineTo(0, slopeH); // Inner apex bottom (flush on wall)
+      roofShape.lineTo(rW / 2, 0); // Right inner edge
+      roofShape.lineTo(rW / 2, t); // Right outer top
+      roofShape.lineTo(0, slopeH + t); // Outer apex top
+      roofShape.lineTo(-rW / 2, t); // Left outer top
+      roofShape.lineTo(-rW / 2, 0); // Close
       
       return (
         <group position={[0, h, -rL / 2]}>
@@ -323,8 +324,8 @@ export default function GarageModel({ config }: GarageModelProps) {
           {config.gutters && (
             <>
               {/* Horizontals */}
-              <mesh position={[-rW / 2 + 0.1, -t/2, rL/2]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
-              <mesh position={[rW / 2 - 0.1, -t/2, rL/2]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
+              <mesh position={[-rW / 2 + 0.1, t/2, rL/2]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
+              <mesh position={[rW / 2 - 0.1, t/2, rL/2]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
               {/* Verticals (Downspouts) at back corners */}
               <mesh position={[-rW / 2 + 0.1, -h/2, 0]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh>
               <mesh position={[rW / 2 - 0.1, -h/2, 0]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh>
@@ -335,34 +336,36 @@ export default function GarageModel({ config }: GarageModelProps) {
     }
     
     // Sloped flat roofs
-    let rotX = 0, rotZ = 0, yOffset = h;
+    let rotX = 0, rotZ = 0;
     let gutterLine = null; // [x, y, z, rotX, rotZ, length]
     let downspouts = []; // [x, y, z, height]
+    
+    let yOffset = h + slopeH / 2;
 
     if (rT === 'slope-back') {
       rotX = Math.atan(slopeH / l);
-      yOffset = h + slopeH / 2;
+      yOffset += (t/2) / Math.cos(rotX);
       if (config.gutters) {
         gutterLine = [0, h - 0.05, -l/2 - 0.1, 0, Math.PI/2, rW];
         downspouts.push([-w/2, h/2, -l/2 - 0.1, h]);
       }
     } else if (rT === 'slope-front') {
       rotX = -Math.atan(slopeH / l);
-      yOffset = h + slopeH / 2;
+      yOffset += (t/2) / Math.cos(rotX);
       if (config.gutters) {
         gutterLine = [0, h - 0.05, l/2 + 0.1, 0, Math.PI/2, rW];
         downspouts.push([w/2, h/2, l/2 + 0.1, h]);
       }
     } else if (rT === 'slope-left') {
       rotZ = Math.atan(slopeH / w);
-      yOffset = h + slopeH / 2;
+      yOffset += (t/2) / Math.cos(rotZ);
       if (config.gutters) {
         gutterLine = [-w/2 - 0.1, h - 0.05, 0, Math.PI/2, 0, rL];
         downspouts.push([-w/2 - 0.1, h/2, -l/2, h]);
       }
     } else if (rT === 'slope-right') {
       rotZ = -Math.atan(slopeH / w);
-      yOffset = h + slopeH / 2;
+      yOffset += (t/2) / Math.cos(rotZ);
       if (config.gutters) {
         gutterLine = [w/2 + 0.1, h - 0.05, 0, Math.PI/2, 0, rL];
         downspouts.push([w/2 + 0.1, h/2, l/2, h]);
