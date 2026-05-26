@@ -86,18 +86,13 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
 
     const phase = animState.current.progress;
 
-    if (el.gateType === 'swing') {
-      const leftDoor = ref.current.children[0];
-      const rightDoor = ref.current.children[1];
-      if (leftDoor && rightDoor) {
-        leftDoor.rotation.y = phase * (Math.PI / 2);
-        rightDoor.rotation.y = -phase * (Math.PI / 2);
-      }
-    } else if (el.gateType === 'up-and-over') {
-      const pivot = ref.current.children[0];
-      if (pivot) {
-        // Rotate up from the top pivot
-        pivot.rotation.x = phase * (Math.PI / 2 - 0.1);
+    if (el.gateType === 'up-and-over') {
+      const door = ref.current.children[0];
+      if (door) {
+        // Top hinge pivot
+        door.rotation.x = phase * (Math.PI / 2.2);
+        door.position.y = (elH / 2) + phase * (elH / 2);
+        door.position.z = phase * (elH / 4);
       }
     } else if (el.gateType === 'sectional') {
       const door = ref.current.children[0];
@@ -106,12 +101,35 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
         const elY = el.y * 0.01;
         
         // Ceiling clearance
-        const maxV = Math.max(0, h - elY - 0.15);
+        const maxV = Math.max(elH, h - elY - 0.10);
         
-        // Rigid curved path tracking under the ceiling
-        door.rotation.x = phase * (Math.PI / 2);
-        door.position.y = (elH / 2) + phase * (maxV - elH / 2);
-        door.position.z = -phase * (elH / 2);
+        // Slide UP first (phase 0 to 0.5), then curve INWARDS (phase 0.5 to 1.0)
+        let theta = 0;
+        let y_c = elH / 2;
+        let z_c = 0;
+
+        const slidePhase = Math.min(1, phase * 2);
+        const maxVerticalY_c = maxV - elH / 2;
+        y_c = (elH / 2) + slidePhase * (maxVerticalY_c - elH / 2);
+
+        if (phase > 0.5) {
+          const curvePhase = (phase - 0.5) * 2;
+          theta = curvePhase * (Math.PI / 2);
+          
+          z_c = - (elH / 2) * Math.sin(theta);
+          y_c = maxV - (elH / 2) * Math.cos(theta);
+        }
+
+        door.rotation.x = -theta;
+        door.position.y = y_c;
+        door.position.z = z_c;
+      }
+    } else if (el.gateType === 'swing') {
+      const leftDoor = ref.current.children[0];
+      const rightDoor = ref.current.children[1];
+      if (leftDoor && rightDoor) {
+        leftDoor.rotation.y = phase * (Math.PI / 2);
+        rightDoor.rotation.y = -phase * (Math.PI / 2);
       }
     }
   });
@@ -142,12 +160,10 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
     return (
       <group ref={ref} position={[el.x * 0.01, el.y * 0.01, 0]}>
         {/* Pivot group at the very top of the door */}
-        <group position={[0, elH, 0]}>
-          <mesh position={[0, -elH / 2, 0]}>
-            <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
-            {doorMat}
-          </mesh>
-        </group>
+        <mesh position={[0, elH / 2, 0]}>
+          <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
+          {doorMat}
+        </mesh>
       </group>
     );
   }
@@ -155,19 +171,17 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
   // Sectional
   return (
     <group ref={ref} position={[el.x * 0.01, el.y * 0.01, 0]}>
-      <group position={[0, 0, 0]}>
-        <mesh position={[0, elH / 2, 0]}>
-          <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
-          {doorMat}
-          {/* Decorative horizontal lines to indicate sections */}
-          {[...Array(4)].map((_, i) => (
-            <mesh key={i} position={[0, (elH / 5) * (i - 1.5), t / 2 + 0.01]}>
-              <boxGeometry args={[elW - 0.04, 0.02, 0.01]} />
-              <meshStandardMaterial color="#000000" opacity={0.3} transparent />
-            </mesh>
-          ))}
-        </mesh>
-      </group>
+      <mesh position={[0, elH / 2, 0]}>
+        <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
+        {doorMat}
+        {/* Decorative horizontal lines to indicate sections */}
+        {[...Array(4)].map((_, i) => (
+          <mesh key={i} position={[0, (elH / 5) * (i - 1.5), t / 2 + 0.01]}>
+            <boxGeometry args={[elW - 0.04, 0.02, 0.01]} />
+            <meshStandardMaterial color="#000000" opacity={0.3} transparent />
+          </mesh>
+        ))}
+      </mesh>
     </group>
   );
 }
@@ -179,23 +193,15 @@ export default function GarageModel({ config }: GarageModelProps) {
   const t = 0.05; // wall thickness
   const slopeH = 0.4;
 
-  const bumpMap = useMemo(() => createBumpMap(config.corrugationPattern), [config.corrugationPattern]);
+  const wallTexture = useMemo(() => createBumpMap(config.corrugationPattern), [config.corrugationPattern]);
+  const roofTexture = useMemo(() => createBumpMap(config.corrugationPattern), [config.corrugationPattern]);
   const woodTex = useMemo(() => createWoodTexture(), []);
 
-  const baseMaterialProps = {
-    roughness: config.finish === 'golden-oak' ? 0.5 : 0.2,
-    metalness: config.finish === 'golden-oak' ? 0.2 : 0.85,
-    map: config.finish === 'golden-oak' ? woodTex : null,
-    bumpMap: config.finish === 'standard' ? bumpMap : null,
-    bumpScale: 0.015,
-  };
-
-  const wallMat = <meshStandardMaterial color={config.finish === 'golden-oak' ? '#ffffff' : config.wallColor} {...baseMaterialProps} />;
-  const roofMat = <meshStandardMaterial color={config.finish === 'golden-oak' ? '#ffffff' : config.roofColor} {...baseMaterialProps} />;
-  const doorMat = <meshStandardMaterial color={config.finish === 'golden-oak' ? '#ffffff' : config.doorColor} {...baseMaterialProps} />;
+  const wallMat = <meshStandardMaterial color={config.wallColor} roughness={0.2} metalness={0.85} bumpMap={wallTexture} bumpScale={0.015} side={THREE.DoubleSide} />;
+  const roofMat = <meshStandardMaterial color={config.roofColor} roughness={0.2} metalness={0.85} bumpMap={roofTexture} bumpScale={0.015} side={THREE.DoubleSide} />;
+  const doorMat = <meshStandardMaterial color={config.doorColor} roughness={0.2} metalness={0.85} bumpMap={wallTexture} bumpScale={0.015} />;
 
   // Heights logic for the 5 roof types
-  // L = Left (-X), R = Right (+X), F = Front (+Z), B = Back (-Z)
   let frontL = h, frontC: number | null = null, frontR = h;
   let backL = h, backC: number | null = null, backR = h;
   let leftB = h, leftF = h;
@@ -204,21 +210,23 @@ export default function GarageModel({ config }: GarageModelProps) {
   if (config.roofType === 'dual-slope') {
     frontC = h + slopeH; backC = h + slopeH;
   } else if (config.roofType === 'slope-back') {
-    // Front is higher
-    frontL = h + slopeH; frontR = h + slopeH;
-    leftF = h + slopeH; rightF = h + slopeH;
+    frontL = frontC = frontR = h + slopeH;
+    leftF = h + slopeH;
+    rightF = h + slopeH;
   } else if (config.roofType === 'slope-front') {
-    // Back is higher
-    backL = h + slopeH; backR = h + slopeH;
-    leftB = h + slopeH; rightB = h + slopeH;
+    backL = backC = backR = h + slopeH;
+    leftB = h + slopeH;
+    rightB = h + slopeH;
   } else if (config.roofType === 'slope-left') {
-    // Right is higher
-    frontR = h + slopeH; backR = h + slopeH;
-    rightB = h + slopeH; rightF = h + slopeH;
+    frontR = h + slopeH;
+    backR = h + slopeH;
+    rightF = h + slopeH;
+    rightB = h + slopeH;
   } else if (config.roofType === 'slope-right') {
-    // Left is higher
-    frontL = h + slopeH; backL = h + slopeH;
-    leftB = h + slopeH; leftF = h + slopeH;
+    frontL = h + slopeH;
+    backL = h + slopeH;
+    leftF = h + slopeH;
+    leftB = h + slopeH;
   }
 
   const createWallShape = (width: number, lH: number, cH: number | null, rH: number) => {
