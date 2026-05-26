@@ -11,7 +11,7 @@ interface GarageModelProps {
   config: GarageConfig;
 }
 
-// ── Procedural bump / normal map for PBR finishes ──────────────────────────
+// ── Proceduralna mapa wypukłości (Bump Map) ──────────────────────────
 function createBumpMap(profile: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -91,45 +91,45 @@ function createBumpMap(profile: string): THREE.CanvasTexture {
   return tex;
 }
 
-// ── Sectional gate (Brama Segmentowa - naprawiona) ───────────────────────
+// ── Brama Segmentowa (Nowa logika prowadnicy) ───────────────────────
 const PANEL_COUNT = 5;
 
-function SectionalGate({ el, gateMat, garageHeight }: { el: GarageElement; gateMat: ReactNode; garageHeight: number }) {
+function SectionalGate({ el, gateMat }: { el: GarageElement; gateMat: ReactNode; }) {
   const groupRef = useRef<THREE.Group>(null);
   const progress = useRef(el.isOpen ? 1 : 0);
 
-  const elW = el.width  * 0.01;
+  const elW = el.width * 0.01;
   const elH = el.height * 0.01;
   const thick = 0.05;
   const panelH = elH / PANEL_COUNT;
-  
-  // Zakręt pod sufitem (nieco poniżej dachu)
-  const turnY = garageHeight * 0.01 - 0.1; 
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
     const target = el.isOpen ? 1 : 0;
     progress.current += (target - progress.current) * Math.min(1, delta * 3.0);
-    const phase = progress.current;
-    const panels = groupRef.current.children;
+    const p = progress.current;
 
+    const panels = groupRef.current.children;
     for (let i = 0; i < PANEL_COUNT; i++) {
       const panel = panels[i] as THREE.Group;
       if (!panel) continue;
 
-      // Pozycja startowa panelu (zamknięty)
-      const startY = i * panelH + panelH / 2;
-      // Całkowite przesunięcie bramy przy otwieraniu
-      const currentS = startY + phase * (elH + 0.15); 
+      const startY = i * panelH;
+      // Droga otwierania: brama chowa się w całości plus lekki zapas
+      const totalTravel = elH + 0.1; 
+      const posOnTrack = startY + p * totalTravel;
 
-      if (currentS <= turnY) {
-        // Panel jedzie pionowo po ścianie
-        panel.position.set(0, currentS, 0);
+      // Punkt zakrętu: górna krawędź otworu bramy
+      const curveStartY = elH - panelH;
+
+      if (posOnTrack <= curveStartY) {
+        // Jedzie w górę po pionowej ścianie
+        panel.position.set(0, posOnTrack + panelH / 2, 0);
         panel.rotation.x = 0;
       } else {
-        // Panel osiągnął sufit, kładzie się płasko i jedzie w głąb garażu (-Z)
-        const overflow = currentS - turnY;
-        panel.position.set(0, turnY + panelH / 2, -overflow - panelH / 2);
+        // Kładzie się płasko pod sufitem i jedzie w głąb (-Z)
+        const overflow = posOnTrack - curveStartY;
+        panel.position.set(0, elH - thick / 2, -overflow - panelH / 2);
         panel.rotation.x = -Math.PI / 2;
       }
     }
@@ -153,10 +153,10 @@ function SectionalGate({ el, gateMat, garageHeight }: { el: GarageElement; gateM
   );
 }
 
-// ── Animated gate (Uchylna i Dwuskrzydłowa) ───────────────────────────────
-function AnimatedGate({ el, gateMat, garageHeight }: { el: GarageElement; gateMat: ReactNode; garageHeight: number; }) {
+// ── Brama Uchylna i Dwuskrzydłowa ───────────────────────────────
+function AnimatedGate({ el, gateMat }: { el: GarageElement; gateMat: ReactNode; }) {
   const ref = useRef<THREE.Group>(null);
-  const elW = el.width  * 0.01;
+  const elW = el.width * 0.01;
   const elH = el.height * 0.01;
   const thick = 0.05;
   const animState = useRef({ progress: el.isOpen ? 1 : 0 });
@@ -169,7 +169,6 @@ function AnimatedGate({ el, gateMat, garageHeight }: { el: GarageElement; gateMa
 
     if (el.gateType === 'up-and-over') {
       const pivot = ref.current.children[0];
-      // Brama uchylna - chowa się pod sufit do środka garażu (Z ujemne)
       if (pivot) pivot.rotation.x = phase * (Math.PI / 2); 
     } else if (el.gateType === 'swing') {
       const leftDoor  = ref.current.children[0];
@@ -180,7 +179,7 @@ function AnimatedGate({ el, gateMat, garageHeight }: { el: GarageElement; gateMa
   });
 
   if (el.gateType === 'sectional') {
-    return <SectionalGate el={el} gateMat={gateMat} garageHeight={garageHeight} />;
+    return <SectionalGate el={el} gateMat={gateMat} />;
   }
 
   if (el.gateType === 'swing') {
@@ -212,7 +211,6 @@ function AnimatedGate({ el, gateMat, garageHeight }: { el: GarageElement; gateMa
 
   return (
     <group ref={ref} position={[el.x * 0.01, el.y * 0.01, 0]}>
-      {/* Pivot przeniesiony na górną krawędź */}
       <group position={[0, elH, 0]}>
         <mesh position={[0, -elH / 2, 0]} castShadow receiveShadow>
           <boxGeometry args={[elW - 0.02, elH - 0.02, thick]} />
@@ -227,9 +225,9 @@ function AnimatedGate({ el, gateMat, garageHeight }: { el: GarageElement; gateMa
   );
 }
 
-// ── Main garage model ──────────────────────────────────────────────────────
+// ── Główny model Garażu ──────────────────────────────────────────────────────
 export default function GarageModel({ config }: GarageModelProps) {
-  const w = config.width  * 0.01;
+  const w = config.width * 0.01;
   const l = config.length * 0.01;
   const h = config.height * 0.01;
   const t = 0.05;     
@@ -242,41 +240,31 @@ export default function GarageModel({ config }: GarageModelProps) {
 
   const effWallColor = config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor;
 
-  const wallMat = (
-    <meshStandardMaterial color={effWallColor} roughness={0.3} metalness={0.8} bumpMap={wallBump} bumpScale={0.03} side={THREE.DoubleSide} />
-  );
-  const roofMat = (
-    <meshStandardMaterial color={config.roofColor} roughness={0.3} metalness={0.8} bumpMap={roofBump} bumpScale={0.03} side={THREE.DoubleSide} />
-  );
-  const gateMat = (
-    <meshStandardMaterial color={config.gateColor} roughness={0.3} metalness={0.8} bumpMap={gateBump} bumpScale={0.03} />
-  );
-  const doorMat = (
-    <meshStandardMaterial color={config.doorColor} roughness={0.3} metalness={0.8} bumpMap={doorBump} bumpScale={0.03} />
-  );
+  // Poprawione materiały z mocniejszym odbiciem
+  const matProps = { roughness: 0.2, metalness: 0.9, envMapIntensity: 2.5, bumpScale: 0.08 };
+  
+  const wallMat = <meshStandardMaterial color={effWallColor} {...matProps} bumpMap={wallBump} side={THREE.DoubleSide} />;
+  const roofMat = <meshStandardMaterial color={config.roofColor} {...matProps} bumpMap={roofBump} side={THREE.DoubleSide} />;
+  const gateMat = <meshStandardMaterial color={config.gateColor} {...matProps} bumpMap={gateBump} />;
+  const doorMat = <meshStandardMaterial color={config.doorColor} {...matProps} bumpMap={doorBump} />;
 
-  // ── Wyliczanie matematyczne wysokości rogów ścian ────────────────────
+  // ── Kuloodporna logika dachów ────────────────────
   let hFL = h, hFR = h, hBL = h, hBR = h;
   let frontCenter: number | null = null;
   let backCenter:  number | null = null;
+  
+  const rt = (config.roofType || '').toLowerCase();
 
-  switch (config.roofType) {
-    case 'dual-slope':
-      frontCenter = h + slopeH;
-      backCenter  = h + slopeH;
-      break;
-    case 'slope-front':
-      hBL = h + slopeH; hBR = h + slopeH;
-      break;
-    case 'slope-back':
-      hFL = h + slopeH; hFR = h + slopeH;
-      break;
-    case 'slope-left':
-      hFR = h + slopeH; hBR = h + slopeH;
-      break;
-    case 'slope-right':
-      hFL = h + slopeH; hBL = h + slopeH;
-      break;
+  if (rt.includes('dwuspadowy')) {
+    frontCenter = h + slopeH; backCenter = h + slopeH;
+  } else if (rt.includes('przód') || rt.includes('przod') || rt.includes('front')) {
+    hBL = h + slopeH; hBR = h + slopeH;
+  } else if (rt.includes('tył') || rt.includes('tyl') || rt.includes('back') || rt.includes('rear')) {
+    hFL = h + slopeH; hFR = h + slopeH;
+  } else if (rt.includes('lewo') || rt.includes('left')) {
+    hFR = h + slopeH; hBR = h + slopeH;
+  } else if (rt.includes('prawo') || rt.includes('right')) {
+    hFL = h + slopeH; hBL = h + slopeH;
   }
 
   const createFBShape = (leftH: number, rightH: number, centerH: number | null) => {
@@ -323,17 +311,17 @@ export default function GarageModel({ config }: GarageModelProps) {
     return (
       <group position={pos} rotation={[0, rotY, 0]}>
         {config.elements.filter(e => e.wall === wall).map((el) => {
-          const elW = el.width  * 0.01; const elH = el.height * 0.01; const elY = el.y * 0.01;
-          let xPos  = el.x * 0.01;
+          const elW = el.width * 0.01; const elH = el.height * 0.01; const elY = el.y * 0.01;
+          let xPos = el.x * 0.01;
           if (isSide) xPos = isLeft ? (l / 2 - el.x * 0.01) : (l / 2 + el.x * 0.01);
 
           if (el.type === 'window' || el.type === 'pvc-window' || el.type === 'skylight') {
-            const fc = config.windowColor;
+            const fc = config.windowColor || '#333';
             return (
               <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
                 <mesh castShadow receiveShadow>
                   <boxGeometry args={[elW - 0.06, elH - 0.06, t - 0.02]} />
-                  <meshStandardMaterial color={el.type === 'skylight' ? '#ddeeff' : '#1a2a3a'} opacity={el.type === 'skylight' ? 0.85 : 0.55} transparent roughness={0.05} metalness={0.95} envMapIntensity={2} />
+                  <meshStandardMaterial color={el.type === 'skylight' ? '#ddeeff' : '#1a2a3a'} opacity={el.type === 'skylight' ? 0.85 : 0.55} transparent roughness={0.05} metalness={0.95} envMapIntensity={2.5} />
                 </mesh>
                 <mesh><boxGeometry args={[elW, 0.04, t + 0.02]} /><meshStandardMaterial color={fc} roughness={0.3} metalness={0.6} /></mesh>
                 <mesh><boxGeometry args={[0.04, elH, t + 0.02]} /><meshStandardMaterial color={fc} roughness={0.3} metalness={0.6} /></mesh>
@@ -341,7 +329,7 @@ export default function GarageModel({ config }: GarageModelProps) {
               </group>
             );
           } else if (el.type === 'gate') {
-            return <AnimatedGate key={el.id} el={{ ...el, x: xPos * 100 }} gateMat={gateMat} garageHeight={config.height} />;
+            return <AnimatedGate key={el.id} el={{ ...el, x: xPos * 100 }} gateMat={gateMat} />;
           } else {
             return (
               <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
@@ -358,13 +346,12 @@ export default function GarageModel({ config }: GarageModelProps) {
     );
   };
 
-  // ── Nowa, matematycznie idealna logika Dachu ───────────────────────────────
   const renderRoof = () => {
     const gutterMat = <meshStandardMaterial color="#3b3b3c" roughness={0.6} metalness={0.55} />;
     const rL = l + 0.4; 
     const rW = w + 0.4; 
 
-    if (config.roofType === 'dual-slope') {
+    if (rt.includes('dwuspadowy')) {
       const roofShape = new THREE.Shape();
       roofShape.moveTo(-rW / 2, 0); roofShape.lineTo(0, slopeH); roofShape.lineTo( rW / 2, 0);
       roofShape.lineTo( rW / 2, t); roofShape.lineTo(0, slopeH + t); roofShape.lineTo(-rW / 2, t);
@@ -387,19 +374,19 @@ export default function GarageModel({ config }: GarageModelProps) {
     let roofRotX = 0, roofRotZ = 0;
     let gutterMesh = null, downspouts = null;
 
-    if (config.roofType === 'slope-front') {
+    if (rt.includes('przód') || rt.includes('przod') || rt.includes('front')) {
       roofRotX = Math.atan2(slopeH, l);
       gutterMesh = <mesh position={[0, 0, rL / 2]} rotation={[0, 0, Math.PI / 2]} castShadow><cylinderGeometry args={[0.06, 0.06, rW]} />{gutterMat}</mesh>;
       downspouts = <><mesh position={[-w/2 + 0.1, h/2, l/2 + 0.15]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh><mesh position={[w/2 - 0.1, h/2, l/2 + 0.15]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh></>;
-    } else if (config.roofType === 'slope-back') {
+    } else if (rt.includes('tył') || rt.includes('tyl') || rt.includes('back') || rt.includes('rear')) {
       roofRotX = -Math.atan2(slopeH, l);
       gutterMesh = <mesh position={[0, 0, -rL / 2]} rotation={[0, 0, Math.PI / 2]} castShadow><cylinderGeometry args={[0.06, 0.06, rW]} />{gutterMat}</mesh>;
       downspouts = <><mesh position={[-w/2 + 0.1, h/2, -l/2 - 0.15]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh><mesh position={[w/2 - 0.1, h/2, -l/2 - 0.15]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh></>;
-    } else if (config.roofType === 'slope-left') {
+    } else if (rt.includes('lewo') || rt.includes('left')) {
       roofRotZ = Math.atan2(slopeH, w);
       gutterMesh = <mesh position={[-rW / 2, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.06, 0.06, rL]} />{gutterMat}</mesh>;
       downspouts = <><mesh position={[-w/2 - 0.15, h/2, l/2 - 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh><mesh position={[-w/2 - 0.15, h/2, -l/2 + 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh></>;
-    } else if (config.roofType === 'slope-right') {
+    } else if (rt.includes('prawo') || rt.includes('right')) {
       roofRotZ = -Math.atan2(slopeH, w);
       gutterMesh = <mesh position={[rW / 2, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.06, 0.06, rL]} />{gutterMat}</mesh>;
       downspouts = <><mesh position={[w/2 + 0.15, h/2, l/2 - 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh><mesh position={[w/2 + 0.15, h/2, -l/2 + 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh></>;
@@ -419,11 +406,10 @@ export default function GarageModel({ config }: GarageModelProps) {
 
   return (
     <>
-      <Environment preset="park" background blur={0.1} />
-      {/* Realistyczne podłoże */}
+      <Environment preset="city" background blur={0.1} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
         <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#9ea791" roughness={0.9} metalness={0.1} />
+        <meshStandardMaterial color="#889182" roughness={0.8} metalness={0.1} />
       </mesh>
       <ContactShadows resolution={1024} scale={20} blur={2} opacity={0.6} far={10} color="#000000" />
       
