@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, ReactNode } from 'react';
+import { useMemo, useRef, ReactNode, useEffect } from 'react';
 import { GarageConfig, WallFace, GarageElement } from '@/types';
 import * as THREE from 'three';
 import { Geometry, Base, Subtraction } from '@react-three/csg';
@@ -69,11 +69,34 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
   const elH = el.height * 0.01;
   const t = 0.05;
 
-  useFrame(({ clock }) => {
+  const animState = useRef({ progress: 0, direction: 1, playing: false });
+  const prevGateType = useRef(el.gateType);
+
+  useEffect(() => {
+    if (prevGateType.current !== el.gateType) {
+      prevGateType.current = el.gateType;
+      // Reset immediately to closed
+      animState.current = { progress: 0, direction: 1, playing: true };
+    }
+  }, [el.gateType]);
+
+  useFrame((_, delta) => {
     if (!ref.current) return;
-    const time = clock.getElapsedTime();
-    // A simple looping open/close animation over 4 seconds for preview
-    const phase = (Math.sin(time * 1.5) + 1) / 2; // 0 to 1
+    
+    if (animState.current.playing) {
+      // 2 seconds per cycle
+      animState.current.progress += delta * 0.5 * animState.current.direction;
+      
+      if (animState.current.progress >= 1) {
+        animState.current.progress = 1;
+        animState.current.direction = -1; // reverse to close
+      } else if (animState.current.progress <= 0 && animState.current.direction === -1) {
+        animState.current.progress = 0;
+        animState.current.playing = false; // finished cycle
+      }
+    }
+
+    const phase = animState.current.progress;
 
     if (el.gateType === 'swing') {
       const leftDoor = ref.current.children[0];
@@ -93,9 +116,14 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
       if (door) {
         const h = garageHeight * 0.01;
         const elY = el.y * 0.01;
-        // Clamp so it never moves above roofline
-        const maxUp = Math.max(0, Math.min(elH, h - elY - elH));
-        door.position.y = phase * maxUp;
+        
+        // Ceiling clearance
+        const maxV = Math.max(0, h - elY - 0.15);
+        
+        // Rigid curved path tracking under the ceiling
+        door.rotation.x = phase * (Math.PI / 2);
+        door.position.y = (elH / 2) + phase * (maxV - elH / 2);
+        door.position.z = -phase * (elH / 2);
       }
     }
   });
@@ -179,25 +207,30 @@ export default function GarageModel({ config }: GarageModelProps) {
   const doorMat = <meshStandardMaterial color={config.finish === 'golden-oak' ? '#ffffff' : config.doorColor} {...baseMaterialProps} />;
 
   // Heights logic for the 5 roof types
+  // L = Left (-X), R = Right (+X), F = Front (+Z), B = Back (-Z)
   let frontL = h, frontC: number | null = null, frontR = h;
   let backL = h, backC: number | null = null, backR = h;
-  let leftL = h, leftR = h;
-  let rightL = h, rightR = h;
+  let leftB = h, leftF = h;
+  let rightB = h, rightF = h;
 
   if (config.roofType === 'dual-slope') {
     frontC = h + slopeH; backC = h + slopeH;
   } else if (config.roofType === 'slope-back') {
+    // Front is higher
     frontL = h + slopeH; frontR = h + slopeH;
-    leftR = h + slopeH; rightL = h + slopeH;
+    leftF = h + slopeH; rightF = h + slopeH;
   } else if (config.roofType === 'slope-front') {
+    // Back is higher
     backL = h + slopeH; backR = h + slopeH;
-    leftL = h + slopeH; rightR = h + slopeH;
+    leftB = h + slopeH; rightB = h + slopeH;
   } else if (config.roofType === 'slope-left') {
-    frontR = h + slopeH; backL = h + slopeH;
-    rightL = h + slopeH; rightR = h + slopeH;
+    // Right is higher
+    frontR = h + slopeH; backR = h + slopeH;
+    rightB = h + slopeH; rightF = h + slopeH;
   } else if (config.roofType === 'slope-right') {
-    frontL = h + slopeH; backR = h + slopeH;
-    leftL = h + slopeH; leftR = h + slopeH;
+    // Left is higher
+    frontL = h + slopeH; backL = h + slopeH;
+    leftB = h + slopeH; leftF = h + slopeH;
   }
 
   const createWallShape = (width: number, lH: number, cH: number | null, rH: number) => {
@@ -389,7 +422,7 @@ export default function GarageModel({ config }: GarageModelProps) {
       <mesh position={[-w / 2, 0, 0]} rotation={[0, -Math.PI / 2, 0]} castShadow receiveShadow>
         <Geometry>
           <Base>
-            <extrudeGeometry args={[createWallShape(l, leftR, null, leftL), wallExtrudeSettings]} />
+            <extrudeGeometry args={[createWallShape(l, leftB, null, leftF), wallExtrudeSettings]} />
           </Base>
           {getSubtractions('left')}
         </Geometry>
@@ -401,7 +434,7 @@ export default function GarageModel({ config }: GarageModelProps) {
       <mesh position={[w / 2, 0, 0]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
         <Geometry>
           <Base>
-            <extrudeGeometry args={[createWallShape(l, rightL, null, rightR), wallExtrudeSettings]} />
+            <extrudeGeometry args={[createWallShape(l, rightF, null, rightB), wallExtrudeSettings]} />
           </Base>
           {getSubtractions('right')}
         </Geometry>
