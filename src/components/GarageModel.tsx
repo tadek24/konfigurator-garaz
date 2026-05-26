@@ -11,7 +11,7 @@ interface GarageModelProps {
   config: GarageConfig;
 }
 
-// ── Proceduralna mapa wypukłości (Bump Map) ──────────────────────────
+// ── Proceduralna tekstura blachy ──────────────────────────
 function createBumpMap(profile: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -91,7 +91,7 @@ function createBumpMap(profile: string): THREE.CanvasTexture {
   return tex;
 }
 
-// ── Brama Segmentowa (Nowa logika prowadnicy) ───────────────────────
+// ── Brama Segmentowa (Naprawiony margines błędu) ───────────────────────
 const PANEL_COUNT = 5;
 
 function SectionalGate({ el, gateMat }: { el: GarageElement; gateMat: ReactNode; }) {
@@ -114,23 +114,24 @@ function SectionalGate({ el, gateMat }: { el: GarageElement; gateMat: ReactNode;
       const panel = panels[i] as THREE.Group;
       if (!panel) continue;
 
-      const startY = i * panelH;
-      // Droga otwierania: brama chowa się w całości plus lekki zapas
+      const startY = i * panelH + panelH / 2; // Środek panelu
       const totalTravel = elH + 0.1; 
-      const posOnTrack = startY + p * totalTravel;
+      const currentS = startY + p * totalTravel;
 
-      // Punkt zakrętu: górna krawędź otworu bramy
-      const curveStartY = elH - panelH;
+      const maxY = elH - panelH / 2;
 
-      if (posOnTrack <= curveStartY) {
-        // Jedzie w górę po pionowej ścianie
-        panel.position.set(0, posOnTrack + panelH / 2, 0);
+      // DODANO 0.005 marginesu, aby zamkniety górny panel nie obracał się o 90 stopni
+      if (currentS <= maxY + 0.005) {
+        // Jedzie w górę
+        panel.position.set(0, currentS, 0);
         panel.rotation.x = 0;
       } else {
-        // Kładzie się płasko pod sufitem i jedzie w głąb (-Z)
-        const overflow = posOnTrack - curveStartY;
-        panel.position.set(0, elH - thick / 2, -overflow - panelH / 2);
+        // Skręca pod sufit i chowa się do środka
+        const overflow = currentS - maxY;
+        panel.position.set(0, maxY, -overflow);
         panel.rotation.x = -Math.PI / 2;
+        // Wyrównanie do wysokości prowadnicy
+        panel.position.y = elH - thick / 2;
       }
     }
   });
@@ -240,7 +241,6 @@ export default function GarageModel({ config }: GarageModelProps) {
 
   const effWallColor = config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor;
 
-  // Poprawione materiały z mocniejszym odbiciem
   const matProps = { roughness: 0.2, metalness: 0.9, envMapIntensity: 2.5, bumpScale: 0.08 };
   
   const wallMat = <meshStandardMaterial color={effWallColor} {...matProps} bumpMap={wallBump} side={THREE.DoubleSide} />;
@@ -248,22 +248,28 @@ export default function GarageModel({ config }: GarageModelProps) {
   const gateMat = <meshStandardMaterial color={config.gateColor} {...matProps} bumpMap={gateBump} />;
   const doorMat = <meshStandardMaterial color={config.doorColor} {...matProps} bumpMap={doorBump} />;
 
-  // ── Kuloodporna logika dachów ────────────────────
+  // ── Naprawione i w pełni kuloodporne nazewnictwo dachów ────────────────────
   let hFL = h, hFR = h, hBL = h, hBR = h;
   let frontCenter: number | null = null;
   let backCenter:  number | null = null;
   
-  const rt = (config.roofType || '').toLowerCase();
+  const rt = String(config.roofType || '').toLowerCase();
+  
+  const isDual = rt.includes('dwuspadowy') || rt.includes('dual');
+  const isFront = rt.includes('przód') || rt.includes('przod') || rt.includes('front');
+  const isBack = rt.includes('tył') || rt.includes('tyl') || rt.includes('back') || rt.includes('rear');
+  const isLeft = rt.includes('lewo') || rt.includes('left');
+  const isRight = rt.includes('prawo') || rt.includes('right');
 
-  if (rt.includes('dwuspadowy')) {
+  if (isDual) {
     frontCenter = h + slopeH; backCenter = h + slopeH;
-  } else if (rt.includes('przód') || rt.includes('przod') || rt.includes('front')) {
+  } else if (isFront) {
     hBL = h + slopeH; hBR = h + slopeH;
-  } else if (rt.includes('tył') || rt.includes('tyl') || rt.includes('back') || rt.includes('rear')) {
+  } else if (isBack) {
     hFL = h + slopeH; hFR = h + slopeH;
-  } else if (rt.includes('lewo') || rt.includes('left')) {
+  } else if (isLeft) {
     hFR = h + slopeH; hBR = h + slopeH;
-  } else if (rt.includes('prawo') || rt.includes('right')) {
+  } else if (isRight) {
     hFL = h + slopeH; hBL = h + slopeH;
   }
 
@@ -351,7 +357,7 @@ export default function GarageModel({ config }: GarageModelProps) {
     const rL = l + 0.4; 
     const rW = w + 0.4; 
 
-    if (rt.includes('dwuspadowy')) {
+    if (isDual) {
       const roofShape = new THREE.Shape();
       roofShape.moveTo(-rW / 2, 0); roofShape.lineTo(0, slopeH); roofShape.lineTo( rW / 2, 0);
       roofShape.lineTo( rW / 2, t); roofShape.lineTo(0, slopeH + t); roofShape.lineTo(-rW / 2, t);
@@ -374,19 +380,19 @@ export default function GarageModel({ config }: GarageModelProps) {
     let roofRotX = 0, roofRotZ = 0;
     let gutterMesh = null, downspouts = null;
 
-    if (rt.includes('przód') || rt.includes('przod') || rt.includes('front')) {
+    if (isFront) {
       roofRotX = Math.atan2(slopeH, l);
       gutterMesh = <mesh position={[0, 0, rL / 2]} rotation={[0, 0, Math.PI / 2]} castShadow><cylinderGeometry args={[0.06, 0.06, rW]} />{gutterMat}</mesh>;
       downspouts = <><mesh position={[-w/2 + 0.1, h/2, l/2 + 0.15]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh><mesh position={[w/2 - 0.1, h/2, l/2 + 0.15]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh></>;
-    } else if (rt.includes('tył') || rt.includes('tyl') || rt.includes('back') || rt.includes('rear')) {
+    } else if (isBack) {
       roofRotX = -Math.atan2(slopeH, l);
       gutterMesh = <mesh position={[0, 0, -rL / 2]} rotation={[0, 0, Math.PI / 2]} castShadow><cylinderGeometry args={[0.06, 0.06, rW]} />{gutterMat}</mesh>;
       downspouts = <><mesh position={[-w/2 + 0.1, h/2, -l/2 - 0.15]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh><mesh position={[w/2 - 0.1, h/2, -l/2 - 0.15]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh></>;
-    } else if (rt.includes('lewo') || rt.includes('left')) {
+    } else if (isLeft) {
       roofRotZ = Math.atan2(slopeH, w);
       gutterMesh = <mesh position={[-rW / 2, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.06, 0.06, rL]} />{gutterMat}</mesh>;
       downspouts = <><mesh position={[-w/2 - 0.15, h/2, l/2 - 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh><mesh position={[-w/2 - 0.15, h/2, -l/2 + 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh></>;
-    } else if (rt.includes('prawo') || rt.includes('right')) {
+    } else if (isRight) {
       roofRotZ = -Math.atan2(slopeH, w);
       gutterMesh = <mesh position={[rW / 2, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.06, 0.06, rL]} />{gutterMat}</mesh>;
       downspouts = <><mesh position={[w/2 + 0.15, h/2, l/2 - 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh><mesh position={[w/2 + 0.15, h/2, -l/2 + 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh></>;
@@ -407,10 +413,14 @@ export default function GarageModel({ config }: GarageModelProps) {
   return (
     <>
       <Environment preset="city" background blur={0.1} />
+      
+      {/* Sceneria - Asfalt z subtelną siatką */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#889182" roughness={0.8} metalness={0.1} />
+        <planeGeometry args={[150, 150]} />
+        <meshStandardMaterial color="#2a2a2a" roughness={0.9} metalness={0.1} />
       </mesh>
+      <gridHelper args={[150, 150, '#3a3a3a', '#303030']} position={[0, 0, 0]} />
+
       <ContactShadows resolution={1024} scale={20} blur={2} opacity={0.6} far={10} color="#000000" />
       
       <group>
