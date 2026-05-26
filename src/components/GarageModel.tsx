@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, ReactNode, useEffect } from 'react';
-import { GarageConfig, WallFace, GarageElement } from '@/types';
+import { GarageConfig, WallFace, GarageElement, TextureFinish } from '@/types';
 import * as THREE from 'three';
 import { Geometry, Base, Subtraction } from '@react-three/csg';
 import { useFrame } from '@react-three/fiber';
@@ -10,8 +10,8 @@ interface GarageModelProps {
   config: GarageConfig;
 }
 
-// Generates procedural bump map for corrugated metal
-function createBumpMap(pattern: GarageConfig['corrugationPattern']): THREE.CanvasTexture {
+// Generates procedural bump map for PBR finishes
+function createPBRMap(finish: TextureFinish): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 512;
@@ -19,19 +19,35 @@ function createBumpMap(pattern: GarageConfig['corrugationPattern']): THREE.Canva
   if (ctx) {
     ctx.fillStyle = '#888888'; // base neutral grey
     ctx.fillRect(0, 0, 512, 512);
-    
-    // T-7 narrow (approx 16px), T-14 wide (approx 32px)
-    const spacing = pattern.includes('t7') ? 16 : 32;
-    const isVertical = pattern.includes('vertical');
 
-    ctx.fillStyle = '#ffffff'; // ridges (high points)
-    if (isVertical) {
-      for (let i = 0; i < 512; i += spacing * 2) {
-        ctx.fillRect(i, 0, spacing, 512);
+    if (finish === 'trapezowa') {
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 512; i += 32) ctx.fillRect(i, 0, 16, 512);
+    } else if (finish === 'rabek') {
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 512; i += 64) ctx.fillRect(i, 0, 4, 512);
+    } else if (finish === 'blachodachowka') {
+      // grid of overlapping tiles
+      ctx.fillStyle = '#ffffff';
+      for (let x = 0; x < 512; x += 64) {
+        for (let y = 0; y < 512; y += 64) {
+          ctx.beginPath();
+          ctx.arc(x + 32, y + 32, 28, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-    } else {
-      for (let i = 0; i < 512; i += spacing * 2) {
-        ctx.fillRect(0, i, 512, spacing);
+    } else if (finish === 'drewnopodobna') {
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 512; i += 4) {
+        if (Math.random() > 0.5) ctx.fillRect(0, i, 512, 2);
+      }
+    } else if (finish === 'ocynk') {
+      for (let x = 0; x < 512; x += 4) {
+        for (let y = 0; y < 512; y += 4) {
+          const lum = Math.floor(Math.random() * 255);
+          ctx.fillStyle = `rgb(${lum},${lum},${lum})`;
+          ctx.fillRect(x, y, 4, 4);
+        }
       }
     }
   }
@@ -39,26 +55,6 @@ function createBumpMap(pattern: GarageConfig['corrugationPattern']): THREE.Canva
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(4, 4);
-  return tex;
-}
-
-function createWoodTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#d49a57';
-    ctx.fillRect(0, 0, 512, 512);
-    ctx.fillStyle = '#b67a3d';
-    for (let i = 0; i < 512; i += 4) {
-      if (Math.random() > 0.5) ctx.fillRect(0, i, 512, 2);
-    }
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 2);
   return tex;
 }
 
@@ -87,12 +83,10 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
     const phase = animState.current.progress;
 
     if (el.gateType === 'up-and-over') {
-      const door = ref.current.children[0];
-      if (door) {
-        // Top hinge pivot
-        door.rotation.x = phase * (Math.PI / 2.2);
-        door.position.y = (elH / 2) + phase * (elH / 2);
-        door.position.z = phase * (elH / 4);
+      const pivot = ref.current.children[0];
+      if (pivot) {
+        // Top hinge pivot, swinging INWARDS
+        pivot.rotation.x = -phase * (Math.PI / 2.2);
       }
     } else if (el.gateType === 'sectional') {
       const door = ref.current.children[0];
@@ -160,10 +154,12 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
     return (
       <group ref={ref} position={[el.x * 0.01, el.y * 0.01, 0]}>
         {/* Pivot group at the very top of the door */}
-        <mesh position={[0, elH / 2, 0]}>
-          <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
-          {doorMat}
-        </mesh>
+        <group position={[0, elH, 0]}>
+          <mesh position={[0, -elH / 2, 0]}>
+            <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
+            {doorMat}
+          </mesh>
+        </group>
       </group>
     );
   }
@@ -193,13 +189,17 @@ export default function GarageModel({ config }: GarageModelProps) {
   const t = 0.05; // wall thickness
   const slopeH = 0.4;
 
-  const wallTexture = useMemo(() => createBumpMap(config.corrugationPattern), [config.corrugationPattern]);
-  const roofTexture = useMemo(() => createBumpMap(config.corrugationPattern), [config.corrugationPattern]);
-  const woodTex = useMemo(() => createWoodTexture(), []);
+  const wallTexture = useMemo(() => createPBRMap(config.finish), [config.finish]);
+  const roofTexture = useMemo(() => createPBRMap(config.finish), [config.finish]);
 
-  const wallMat = <meshStandardMaterial color={config.wallColor} roughness={0.2} metalness={0.85} bumpMap={wallTexture} bumpScale={0.015} side={THREE.DoubleSide} />;
-  const roofMat = <meshStandardMaterial color={config.roofColor} roughness={0.2} metalness={0.85} bumpMap={roofTexture} bumpScale={0.015} side={THREE.DoubleSide} />;
-  const doorMat = <meshStandardMaterial color={config.doorColor} roughness={0.2} metalness={0.85} bumpMap={wallTexture} bumpScale={0.015} />;
+  // If ocynk, force silver color
+  const effectiveWallColor = config.finish === 'ocynk' ? '#d4d4d4' : config.wallColor;
+  const effectiveRoofColor = config.finish === 'ocynk' ? '#d4d4d4' : config.roofColor;
+  const effectiveDoorColor = config.finish === 'ocynk' ? '#d4d4d4' : config.doorColor;
+
+  const wallMat = <meshStandardMaterial color={effectiveWallColor} roughness={0.2} metalness={0.85} bumpMap={wallTexture} bumpScale={0.015} side={THREE.DoubleSide} />;
+  const roofMat = <meshStandardMaterial color={effectiveRoofColor} roughness={0.2} metalness={0.85} bumpMap={roofTexture} bumpScale={0.015} side={THREE.DoubleSide} />;
+  const doorMat = <meshStandardMaterial color={effectiveDoorColor} roughness={0.2} metalness={0.85} bumpMap={wallTexture} bumpScale={0.015} />;
 
   // Heights logic for the 5 roof types
   let frontL = h, frontC: number | null = null, frontR = h;

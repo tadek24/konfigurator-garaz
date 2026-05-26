@@ -11,10 +11,10 @@ const INITIAL_CONFIG: GarageConfig = {
   length: 600,
   height: 220,
   roofType: 'dual-slope',
-  roofColor: '#7a7a7a',
+  roofColor: '#3b3b3c',
   wallColor: '#e3e3e3',
   doorColor: '#7a7a7a',
-  finish: 'standard',
+  finish: 'trapezowa',
   corrugationPattern: 'vertical-t7',
   gutters: true,
   elements: [
@@ -47,7 +47,7 @@ export default function Home() {
       base += (config.height - 220) * 10;
     }
 
-    if (config.finish === 'golden-oak') {
+    if (config.finish === 'drewnopodobna' || config.finish === 'blachodachowka') {
       base += area * 80;
     }
 

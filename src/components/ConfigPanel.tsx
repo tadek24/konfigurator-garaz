@@ -27,8 +27,30 @@ const CORRUGATION_PATTERNS: { type: CorrugationPattern; label: string }[] = [
   { type: 'horizontal-t14', label: 'Poziome T-14' },
 ];
 
+import { Suspense, useEffect } from 'react';
+
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall }: ConfigPanelProps) {
   
+  // Dynamic gate height enforcement for 'slope-front'
+  useEffect(() => {
+    if (config.roofType === 'slope-front') {
+      const maxH = config.height - 30;
+      let changed = false;
+      const newElements = config.elements.map(el => {
+        if (el.wall === 'front' && el.type === 'gate') {
+          let updated = { ...el };
+          if (updated.height > maxH) { updated.height = maxH; changed = true; }
+          if (updated.clearanceHeight && updated.clearanceHeight > maxH) { updated.clearanceHeight = maxH; changed = true; }
+          return updated;
+        }
+        return el;
+      });
+      if (changed) {
+        setConfig(prev => ({ ...prev, elements: newElements }));
+      }
+    }
+  }, [config.roofType, config.height, config.elements, setConfig]);
+
   const updateConfig = (key: keyof GarageConfig, value: any) => {
     setConfig(prev => ({ ...prev, [key]: value }));
   };
@@ -359,32 +381,40 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
 
         <div className="mb-5">
-          <span className="text-sm font-medium text-zinc-700 mb-2 block">Rodzaj Poszycia</span>
-          <div className="flex gap-3">
-            <button 
-              onClick={() => updateConfig('finish', 'standard')}
-              className={`flex-1 p-2 border rounded-xl font-medium text-xs transition-all ${config.finish === 'standard' ? 'border-red-600 bg-red-50 text-red-700' : 'border-zinc-200 bg-white'}`}
-            >
-              Blacha standardowa
-            </button>
-            <button 
-              onClick={() => updateConfig('finish', 'golden-oak')}
-              className={`flex-1 p-2 border rounded-xl font-medium text-xs transition-all ${config.finish === 'golden-oak' ? 'border-red-600 bg-red-50 text-red-700' : 'border-zinc-200 bg-white'}`}
-            >
-              Złoty dąb (Premium)
-            </button>
+          <span className="text-sm font-medium text-zinc-700 mb-2 block">Rodzaj Poszycia (Styl PBR)</span>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { type: 'trapezowa', label: 'Blacha Trapezowa' },
+              { type: 'drewnopodobna', label: 'Drewnopodobna' },
+              { type: 'rabek', label: 'Blacha na Rąbek' },
+              { type: 'blachodachowka', label: 'Blachodachówka' },
+              { type: 'ocynk', label: 'Ocynk' }
+            ].map(finish => (
+              <button 
+                key={finish.type}
+                onClick={() => updateConfig('finish', finish.type)}
+                className={`flex-1 min-w-[120px] p-2 border rounded-xl font-medium text-xs transition-all ${config.finish === finish.type ? 'border-red-600 bg-red-50 text-red-700' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}
+              >
+                {finish.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {config.finish === 'standard' && (
+        {config.finish !== 'ocynk' && (
           <div className="space-y-4">
-            {['roofColor', 'wallColor', 'doorColor'].map((key) => (
+            {['roofColor', 'wallColor', 'doorColor'].map((key) => {
+              let colors = ['#e3e3e3', '#3b3b3c', '#4a3028', '#f0f0f0', '#7a2222', '#2f4f4f'];
+              if (config.finish === 'drewnopodobna') {
+                colors = ['#4a3028', '#6b4423', '#8b5a2b', '#3d2314'];
+              }
+              return (
               <div key={key}>
                 <span className="text-sm font-medium text-zinc-700 mb-2 block">
                   Kolor {key === 'roofColor' ? 'Dachu' : key === 'wallColor' ? 'Ścian' : 'Bram/Drzwi'}
                 </span>
                 <div className="flex gap-2 flex-wrap">
-                  {['#e3e3e3', '#3b3b3c', '#4a3028', '#f0f0f0', '#7a2222', '#2f4f4f'].map((color) => (
+                  {colors.map((color) => (
                     <button
                       key={color}
                       onClick={() => updateConfig(key as keyof GarageConfig, color)}
@@ -396,7 +426,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                   ))}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

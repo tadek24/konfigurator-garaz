@@ -7,7 +7,7 @@ export type RoofType =
 
 export type WallFace = 'front' | 'back' | 'left' | 'right';
 export type ElementType = 'gate' | 'door' | 'window' | 'pvc-window' | 'skylight';
-export type TextureFinish = 'standard' | 'golden-oak';
+export type TextureFinish = 'trapezowa' | 'drewnopodobna' | 'rabek' | 'blachodachowka' | 'ocynk';
 export type CorrugationPattern = 'vertical-t7' | 'horizontal-t7' | 'vertical-t14' | 'horizontal-t14';
 export type GateType = 'swing' | 'up-and-over' | 'sectional';
 
