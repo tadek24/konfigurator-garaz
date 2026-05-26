@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, UIEvent } from 'react';
 import { GarageConfig, WallFace } from '@/types';
 import CanvasArea from '@/components/CanvasArea';
 import ConfigPanel from '@/components/ConfigPanel';
@@ -42,10 +42,10 @@ const INITIAL_CONFIG: GarageConfig = {
   windowColor: '#ffffff',
 };
 
-// Definicja kroków dla progress trackera
+// Zaktualizowana kolejność kroków
 const CONFIG_STEPS = [
-  { id: 1, label: 'Wymiary' },
-  { id: 2, label: 'Dach' },
+  { id: 1, label: 'Dach' },
+  { id: 2, label: 'Wymiary' },
   { id: 3, label: 'Bramy i Otoczenie' },
   { id: 4, label: 'Kolory' }
 ];
@@ -53,6 +53,24 @@ const CONFIG_STEPS = [
 export default function Home() {
   const [config, setConfig] = useState<GarageConfig>(INITIAL_CONFIG);
   const [selectedWall, setSelectedWall] = useState<WallFace>('front');
+  const [activeStep, setActiveStep] = useState(1);
+
+  // Funkcja automatycznie zmieniająca aktywny krok na podstawie scrolla
+  const handleScroll = (e: UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollableHeight = target.scrollHeight - target.clientHeight;
+    
+    if (scrollableHeight <= 0) return; // Zabezpieczenie braku scrolla
+
+    const scrollPercentage = target.scrollTop / scrollableHeight;
+    
+    // Progi przewijania (możesz je delikatnie dopasować pod wysokość swoich sekcji)
+    if (scrollPercentage < 0.20) setActiveStep(1);
+    else if (scrollPercentage < 0.50) setActiveStep(2);
+    else if (scrollPercentage < 0.80) setActiveStep(3);
+    else if (scrollPercentage < 0.98) setActiveStep(4);
+    else setActiveStep(5); // Krok 5 to stan "Gotowe" na samym dole
+  };
 
   // Pricing Engine
   const calculatePrice = () => {
@@ -93,7 +111,6 @@ export default function Home() {
       <div className="w-full h-[40vh] md:h-full md:w-[60%] relative bg-zinc-900 shadow-inner">
         <CanvasArea config={config} selectedWall={selectedWall} />
         
-        {/* Poprawiona widoczność tytułu - Glassmorphism */}
         <div className="absolute top-4 left-4 pointer-events-none z-10 bg-zinc-900/60 backdrop-blur-md border border-white/10 p-4 rounded-2xl shadow-xl">
           <h1 className="text-2xl font-black text-white tracking-tight">
             Konfigurator <span className="text-orange-500">3D Pro</span>
@@ -111,31 +128,59 @@ export default function Home() {
         <div className="bg-white border-b border-zinc-200 px-6 py-4 shrink-0 z-10 shadow-sm">
           <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Etapy Konfiguracji</h3>
           <div className="flex justify-between items-center relative">
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-zinc-100 -z-10"></div>
-            {CONFIG_STEPS.map((step, index) => (
-              <div key={step.id} className="flex flex-col items-center gap-1">
-                <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 border border-orange-200 flex items-center justify-center text-xs font-bold">
-                  {step.id}
+            
+            {/* Tło linii */}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-zinc-200 -z-20"></div>
+            
+            {/* Animowana linia postępu */}
+            <div 
+              className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-orange-500 transition-all duration-500 ease-out -z-10"
+              style={{ width: `${((Math.min(activeStep, 5) - 1) / 4) * 100}%` }}
+            ></div>
+            
+            {CONFIG_STEPS.map((step) => {
+              const isCompleted = step.id < activeStep;
+              const isActive = step.id === activeStep;
+              
+              return (
+                <div key={step.id} className="flex flex-col items-center gap-1 z-10">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
+                    isCompleted ? 'bg-orange-500 text-white border border-orange-500' :
+                    isActive ? 'bg-orange-50 text-orange-600 border-2 border-orange-500' :
+                    'bg-white text-zinc-400 border border-zinc-300'
+                  }`}>
+                    {isCompleted ? '✓' : step.id}
+                  </div>
+                  <span className={`text-[10px] font-medium hidden sm:block bg-white px-1 transition-colors ${
+                    isActive || isCompleted ? 'text-zinc-800' : 'text-zinc-400'
+                  }`}>
+                    {step.label}
+                  </span>
                 </div>
-                <span className="text-[10px] font-medium text-zinc-500 hidden sm:block bg-white px-1">
-                  {step.label}
-                </span>
-              </div>
-            ))}
+              );
+            })}
+            
             {/* Ostatni krok - Podsumowanie */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-6 h-6 rounded-full bg-zinc-100 text-zinc-400 border border-zinc-200 flex items-center justify-center text-xs font-bold">
+            <div className="flex flex-col items-center gap-1 z-10">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
+                activeStep === 5 ? 'bg-orange-500 text-white border border-orange-500' : 'bg-white text-zinc-400 border border-zinc-300'
+              }`}>
                 ✓
               </div>
-              <span className="text-[10px] font-medium text-zinc-400 hidden sm:block bg-white px-1">
+              <span className={`text-[10px] font-medium hidden sm:block bg-white px-1 transition-colors ${
+                activeStep === 5 ? 'text-zinc-800' : 'text-zinc-400'
+              }`}>
                 Gotowe
               </span>
             </div>
           </div>
         </div>
 
-        {/* Zawartość konfiguratora (Przewijana) */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
+        {/* Zawartość konfiguratora (Przewijana) - dodano onScroll */}
+        <div 
+          className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar scroll-smooth"
+          onScroll={handleScroll}
+        >
           <ConfigPanel 
             config={config} 
             setConfig={setConfig} 
@@ -154,7 +199,6 @@ export default function Home() {
               </span>
             </div>
             
-            {/* Pełna lista województw */}
             <div className="text-right">
               <label className="text-xs text-zinc-500 block mb-1">Województwo</label>
               <select className="border border-zinc-300 rounded p-1 text-sm bg-zinc-50 focus:ring-orange-500 focus:border-orange-500 outline-none cursor-pointer">
