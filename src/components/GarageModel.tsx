@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, ReactNode, useEffect } from 'react';
-import { GarageConfig, WallFace, GarageElement, TextureFinish } from '@/types';
+import { useMemo, useRef, ReactNode } from 'react';
+import { GarageConfig, WallFace, GarageElement } from '@/types';
 import * as THREE from 'three';
 import { Geometry, Base, Subtraction } from '@react-three/csg';
 import { useFrame } from '@react-three/fiber';
@@ -11,40 +11,42 @@ interface GarageModelProps {
 }
 
 // Generates procedural bump map for PBR finishes
-function createPBRMap(finish: TextureFinish): THREE.CanvasTexture {
+function createBumpMap(profile: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 512;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    ctx.fillStyle = '#888888'; // base neutral grey
+    ctx.fillStyle = '#888888';
     ctx.fillRect(0, 0, 512, 512);
 
-    if (finish === 'trapezowa') {
+    if (profile === 'trapez-t14') {
       ctx.fillStyle = '#ffffff';
-      for (let i = 0; i < 512; i += 32) ctx.fillRect(i, 0, 16, 512);
-    } else if (finish === 'rabek') {
+      for (let i = 0; i < 512; i += 36) ctx.fillRect(i, 0, 18, 512);
+    } else if (profile === 'trapez-t7') {
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 512; i += 28) ctx.fillRect(i, 0, 14, 512);
+    } else if (profile === 'rabek') {
       ctx.fillStyle = '#ffffff';
       for (let i = 0; i < 512; i += 64) ctx.fillRect(i, 0, 4, 512);
-    } else if (finish === 'blachodachowka') {
-      // grid of overlapping tiles
+    } else if (profile === 'blachodachowka') {
       ctx.fillStyle = '#ffffff';
       for (let x = 0; x < 512; x += 64) {
-        for (let y = 0; y < 512; y += 64) {
+        for (let y = 0; y < 512; y += 48) {
           ctx.beginPath();
-          ctx.arc(x + 32, y + 32, 28, 0, Math.PI * 2);
+          ctx.arc(x + 32, y + 24, 22, 0, Math.PI * 2);
           ctx.fill();
         }
       }
-    } else if (finish === 'drewnopodobna') {
+    } else if (profile === 'drewnopodobna') {
       ctx.fillStyle = '#ffffff';
-      for (let i = 0; i < 512; i += 4) {
-        if (Math.random() > 0.5) ctx.fillRect(0, i, 512, 2);
+      for (let i = 0; i < 512; i += 3) {
+        if (Math.random() > 0.4) ctx.fillRect(0, i, 512, 1);
       }
-    } else if (finish === 'ocynk') {
+    } else if (profile === 'ocynk') {
       for (let x = 0; x < 512; x += 4) {
         for (let y = 0; y < 512; y += 4) {
-          const lum = Math.floor(Math.random() * 255);
+          const lum = Math.floor(120 + Math.random() * 135);
           ctx.fillStyle = `rgb(${lum},${lum},${lum})`;
           ctx.fillRect(x, y, 4, 4);
         }
@@ -58,67 +60,72 @@ function createPBRMap(finish: TextureFinish): THREE.CanvasTexture {
   return tex;
 }
 
-function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement, config: GarageConfig, doorMat: ReactNode, garageHeight: number }) {
+function AnimatedGate({ el, gateMat, garageHeight }: { el: GarageElement; gateMat: ReactNode; garageHeight: number }) {
   const ref = useRef<THREE.Group>(null);
   
   const elW = el.width * 0.01;
   const elH = el.height * 0.01;
-  const t = 0.05;
+  const thick = 0.05;
 
   const animState = useRef({ progress: el.isOpen ? 1 : 0 });
 
   useFrame((_, delta) => {
     if (!ref.current) return;
     
-    // Interpolate towards target
     const target = el.isOpen ? 1 : 0;
+    const speed = 1.5;
     if (animState.current.progress < target) {
-      animState.current.progress += delta * 1.5;
-      if (animState.current.progress > target) animState.current.progress = target;
+      animState.current.progress = Math.min(target, animState.current.progress + delta * speed);
     } else if (animState.current.progress > target) {
-      animState.current.progress -= delta * 1.5;
-      if (animState.current.progress < target) animState.current.progress = target;
+      animState.current.progress = Math.max(target, animState.current.progress - delta * speed);
     }
 
     const phase = animState.current.progress;
 
     if (el.gateType === 'up-and-over') {
+      // Tilt gate - pivot at top edge, swings inward
       const pivot = ref.current.children[0];
       if (pivot) {
-        // Top hinge pivot, swinging INWARDS
-        pivot.rotation.x = -phase * (Math.PI / 2.2);
+        pivot.rotation.x = -phase * (Math.PI / 2);
       }
     } else if (el.gateType === 'sectional') {
+      // Sectional gate - slides up then curves under ceiling
       const door = ref.current.children[0];
       if (door) {
-        const h = garageHeight * 0.01;
-        const elY = el.y * 0.01;
+        const ceilingH = garageHeight * 0.01;
         
-        // Ceiling clearance
-        const maxV = Math.max(elH, h - elY - 0.10);
-        
-        // Slide UP first (phase 0 to 0.5), then curve INWARDS (phase 0.5 to 1.0)
-        let theta = 0;
-        let y_c = elH / 2;
-        let z_c = 0;
-
+        // Phase 0..0.5: slide up
+        // Phase 0.5..1: curve inward (rotate + translate Z)
         const slidePhase = Math.min(1, phase * 2);
-        const maxVerticalY_c = maxV - elH / 2;
-        y_c = (elH / 2) + slidePhase * (maxVerticalY_c - elH / 2);
-
-        if (phase > 0.5) {
-          const curvePhase = (phase - 0.5) * 2;
-          theta = curvePhase * (Math.PI / 2);
-          
-          z_c = - (elH / 2) * Math.sin(theta);
-          y_c = maxV - (elH / 2) * Math.cos(theta);
+        const curvePhase = Math.max(0, (phase - 0.5) * 2);
+        
+        // Vertical slide: from elH/2 up to ceiling - elH/2
+        const maxY = Math.min(ceilingH - 0.05, ceilingH);
+        const slideY = elH / 2 + slidePhase * (maxY - elH / 2 - elH / 2);
+        
+        // Curve: rotate around top edge, translating Z inward
+        const theta = curvePhase * (Math.PI / 2);
+        
+        let finalY = slideY;
+        let finalZ = 0;
+        
+        if (curvePhase > 0) {
+          // Pivot point is at top of the gate position
+          const pivotY = maxY;
+          const radius = elH / 2;
+          finalY = pivotY - radius * (1 - Math.cos(theta));
+          finalZ = -radius * Math.sin(theta);
         }
-
+        
+        // Clamp: never below floor, never above ceiling
+        finalY = Math.max(elH / 2, Math.min(finalY, ceilingH));
+        
         door.rotation.x = -theta;
-        door.position.y = y_c;
-        door.position.z = z_c;
+        door.position.y = finalY;
+        door.position.z = finalZ;
       }
     } else if (el.gateType === 'swing') {
+      // Swing gate - two leaves
       const leftDoor = ref.current.children[0];
       const rightDoor = ref.current.children[1];
       if (leftDoor && rightDoor) {
@@ -131,50 +138,50 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
   if (el.gateType === 'swing') {
     return (
       <group ref={ref} position={[el.x * 0.01, el.y * 0.01, 0]}>
-        {/* Left Swing */}
+        {/* Left Swing - pivot at left edge */}
         <group position={[-elW / 2, 0, 0]}>
-          <mesh position={[elW / 4, elH / 2, 0]}>
-            <boxGeometry args={[elW / 2 - 0.01, elH - 0.02, t]} />
-            {doorMat}
+          <mesh position={[elW / 4, elH / 2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[elW / 2 - 0.01, elH - 0.02, thick]} />
+            {gateMat}
           </mesh>
         </group>
-        {/* Right Swing */}
+        {/* Right Swing - pivot at right edge */}
         <group position={[elW / 2, 0, 0]}>
-          <mesh position={[-elW / 4, elH / 2, 0]}>
-            <boxGeometry args={[elW / 2 - 0.01, elH - 0.02, t]} />
-            {doorMat}
+          <mesh position={[-elW / 4, elH / 2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[elW / 2 - 0.01, elH - 0.02, thick]} />
+            {gateMat}
           </mesh>
         </group>
       </group>
     );
   }
 
-  // Tilt Gate
+  // Tilt Gate - pivot at top horizontal edge
   if (el.gateType === 'up-and-over') {
     return (
       <group ref={ref} position={[el.x * 0.01, el.y * 0.01, 0]}>
-        {/* Pivot group at the very top of the door */}
+        {/* Pivot group at the top edge of the door */}
         <group position={[0, elH, 0]}>
-          <mesh position={[0, -elH / 2, 0]}>
-            <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
-            {doorMat}
+          <mesh position={[0, -elH / 2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[elW - 0.02, elH - 0.02, thick]} />
+            {gateMat}
           </mesh>
         </group>
       </group>
     );
   }
 
-  // Sectional
+  // Sectional Gate
   return (
     <group ref={ref} position={[el.x * 0.01, el.y * 0.01, 0]}>
-      <mesh position={[0, elH / 2, 0]}>
-        <boxGeometry args={[elW - 0.02, elH - 0.02, t]} />
-        {doorMat}
-        {/* Decorative horizontal lines to indicate sections */}
+      <mesh position={[0, elH / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[elW - 0.02, elH - 0.02, thick]} />
+        {gateMat}
+        {/* Decorative horizontal section lines */}
         {[...Array(4)].map((_, i) => (
-          <mesh key={i} position={[0, (elH / 5) * (i - 1.5), t / 2 + 0.01]}>
-            <boxGeometry args={[elW - 0.04, 0.02, 0.01]} />
-            <meshStandardMaterial color="#000000" opacity={0.3} transparent />
+          <mesh key={i} position={[0, (elH / 5) * (i - 1.5), thick / 2 + 0.005]}>
+            <boxGeometry args={[elW - 0.04, 0.015, 0.008]} />
+            <meshStandardMaterial color="#000000" opacity={0.25} transparent />
           </mesh>
         ))}
       </mesh>
@@ -189,79 +196,88 @@ export default function GarageModel({ config }: GarageModelProps) {
   const t = 0.05; // wall thickness
   const slopeH = 0.4;
 
-  const wallTexture = useMemo(() => createPBRMap(config.finish), [config.finish]);
-  const roofTexture = useMemo(() => createPBRMap(config.finish), [config.finish]);
+  // Textures
+  const wallBump = useMemo(() => createBumpMap(config.wallProfile), [config.wallProfile]);
+  const roofBump = useMemo(() => createBumpMap(config.roofProfile), [config.roofProfile]);
+  const gateBump = useMemo(() => createBumpMap(config.gateProfile), [config.gateProfile]);
+  const doorBump = useMemo(() => createBumpMap(config.doorProfile), [config.doorProfile]);
 
-  // If ocynk, force silver color
-  const effectiveWallColor = config.finish === 'ocynk' ? '#d4d4d4' : config.wallColor;
-  const effectiveRoofColor = config.finish === 'ocynk' ? '#d4d4d4' : config.roofColor;
-  const effectiveDoorColor = config.finish === 'ocynk' ? '#d4d4d4' : config.doorColor;
+  // Effective colors (force silver for ocynk profile)
+  const effWallColor = config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor;
+  const effRoofColor = config.roofColor;
+  const effGateColor = config.gateColor;
+  const effDoorColor = config.doorColor;
 
-  const wallMat = <meshStandardMaterial color={effectiveWallColor} roughness={0.2} metalness={0.85} bumpMap={wallTexture} bumpScale={0.015} side={THREE.DoubleSide} />;
-  const roofMat = <meshStandardMaterial color={effectiveRoofColor} roughness={0.2} metalness={0.85} bumpMap={roofTexture} bumpScale={0.015} side={THREE.DoubleSide} />;
-  const doorMat = <meshStandardMaterial color={effectiveDoorColor} roughness={0.2} metalness={0.85} bumpMap={wallTexture} bumpScale={0.015} />;
+  // Materials
+  const wallMat = <meshStandardMaterial color={effWallColor} roughness={0.2} metalness={0.85} bumpMap={wallBump} bumpScale={0.015} side={THREE.DoubleSide} />;
+  const roofMat = <meshStandardMaterial color={effRoofColor} roughness={0.2} metalness={0.85} bumpMap={roofBump} bumpScale={0.015} side={THREE.DoubleSide} />;
+  const gateMat = <meshStandardMaterial color={effGateColor} roughness={0.2} metalness={0.85} bumpMap={gateBump} bumpScale={0.015} />;
+  const doorMat = <meshStandardMaterial color={effDoorColor} roughness={0.2} metalness={0.85} bumpMap={doorBump} bumpScale={0.015} />;
 
-  // Heights logic for the roofs
-  let frontL = h, frontC: number | null = null, frontR = h;
-  let backL = h, backC: number | null = null, backR = h;
-  
-  let leftFrontH = h, leftRearH = h;
-  let rightFrontH = h, rightRearH = h;
+  // ── Corner Heights ──
+  // Corners: FL=FrontLeft, FR=FrontRight, BL=BackLeft, BR=BackRight
+  let hFL = h, hFR = h, hBL = h, hBR = h;
+  let frontCenter: number | null = null;
+  let backCenter: number | null = null;
 
-  if (config.roofType === 'dual-slope') {
-    frontC = h + slopeH; backC = h + slopeH;
-  } else if (config.roofType === 'slope-back') {
-    frontL = frontC = frontR = h + slopeH;
-    leftFrontH = rightFrontH = h + slopeH;
-    leftRearH = rightRearH = h;
-  } else if (config.roofType === 'slope-front') {
-    backL = backC = backR = h + slopeH;
-    leftFrontH = rightFrontH = h;
-    leftRearH = rightRearH = h + slopeH;
-  } else if (config.roofType === 'slope-left') {
-    frontR = backR = h + slopeH;
-    rightFrontH = rightRearH = h + slopeH;
-  } else if (config.roofType === 'slope-right') {
-    frontL = backL = h + slopeH;
-    leftFrontH = leftRearH = h + slopeH;
+  switch (config.roofType) {
+    case 'dual-slope':
+      frontCenter = h + slopeH;
+      backCenter = h + slopeH;
+      break;
+    case 'slope-front':
+      // Front SHORT, Back TALL. Roof slopes from back(tall) to front(short).
+      hBL = h + slopeH;
+      hBR = h + slopeH;
+      break;
+    case 'slope-back':
+      // Front TALL, Back SHORT. Roof slopes from front(tall) to back(short).
+      hFL = h + slopeH;
+      hFR = h + slopeH;
+      break;
+    case 'slope-left':
+      // Left SHORT, Right TALL
+      hFR = h + slopeH;
+      hBR = h + slopeH;
+      break;
+    case 'slope-right':
+      // Right SHORT, Left TALL
+      hFL = h + slopeH;
+      hBL = h + slopeH;
+      break;
   }
 
-  // Front and Back walls use centered origin
-  const createFrontBackWallShape = (width: number, lH: number, cH: number | null, rH: number) => {
+  // ── Wall Shape Builders ──
+  // Front/Back walls: shape in XY plane, centered at x=0
+  const createFBShape = (leftH: number, rightH: number, centerH: number | null) => {
     const shape = new THREE.Shape();
-    shape.moveTo(-width / 2, 0);
-    shape.lineTo(width / 2, 0);
-    shape.lineTo(width / 2, rH);
-    if (cH !== null) shape.lineTo(0, cH);
-    shape.lineTo(-width / 2, lH);
-    shape.lineTo(-width / 2, 0);
+    shape.moveTo(-w / 2, 0);
+    shape.lineTo(w / 2, 0);
+    shape.lineTo(w / 2, rightH);
+    if (centerH !== null) shape.lineTo(0, centerH);
+    shape.lineTo(-w / 2, leftH);
+    shape.closePath();
     return shape;
   };
 
-  // Left and Right walls use procedural trapezoids starting at Bottom Front (0,0) going to Bottom Rear (Length, 0)
-  const createSideWallShape = (length: number, frontHeight: number, rearHeight: number) => {
+  // Side walls: shape in XY plane where X=0 is front edge, X=length is rear edge
+  const createSideShape = (frontH: number, rearH: number) => {
     const shape = new THREE.Shape();
-    // Vertex 1: Bottom Front
     shape.moveTo(0, 0);
-    // Vertex 2: Bottom Rear
-    shape.lineTo(length, 0);
-    // Vertex 3: Top Rear
-    shape.lineTo(length, rearHeight);
-    // Vertex 4: Top Front
-    shape.lineTo(0, frontHeight);
-    shape.lineTo(0, 0);
+    shape.lineTo(l, 0);
+    shape.lineTo(l, rearH);
+    shape.lineTo(0, frontH);
+    shape.closePath();
     return shape;
   };
 
-  const wallExtrudeSettings = { depth: t, bevelEnabled: false };
+  const wallExtrude = { depth: t, bevelEnabled: false };
 
-  const getSubtractions = (wall: WallFace, isSide: boolean = false, isLeft: boolean = false) => {
+  // ── CSG Subtractions ──
+  const getSubtractions = (wall: WallFace, isSide = false, isLeft = false) => {
     return config.elements.filter(e => e.wall === wall).map((el, i) => {
       let xShape = el.x * 0.01;
       if (isSide) {
-        // For side walls, Shape X=0 is Front, X=l is Rear. Center is at l/2.
-        // For Left Wall, positive el.x (right from outside) goes towards Front -> X decreases
-        // For Right Wall, positive el.x (right from outside) goes towards Rear -> X increases
         xShape = isLeft ? (l / 2 - el.x * 0.01) : (l / 2 + el.x * 0.01);
       }
       return (
@@ -272,7 +288,8 @@ export default function GarageModel({ config }: GarageModelProps) {
     });
   };
 
-  const renderElements = (wall: WallFace, pos: [number, number, number], rotY: number, isSide: boolean = false, isLeft: boolean = false) => {
+  // ── Element Rendering ──
+  const renderElements = (wall: WallFace, pos: [number, number, number], rotY: number, isSide = false, isLeft = false) => {
     return (
       <group position={pos} rotation={[0, rotY, 0]}>
         {config.elements.filter(e => e.wall === wall).map((el) => {
@@ -286,31 +303,47 @@ export default function GarageModel({ config }: GarageModelProps) {
           }
 
           if (el.type === 'window' || el.type === 'pvc-window' || el.type === 'skylight') {
+            const frameColor = config.windowColor;
             return (
               <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
+                {/* Glass */}
+                <mesh castShadow receiveShadow>
+                  <boxGeometry args={[elW - 0.04, elH - 0.04, t - 0.02]} />
+                  <meshStandardMaterial color={el.type === 'skylight' ? "#ddeeff" : "#1a2a3a"} opacity={el.type === 'skylight' ? 0.85 : 0.55} transparent roughness={0.05} metalness={0.95} />
+                </mesh>
+                {/* Horizontal frame */}
                 <mesh>
-                  <boxGeometry args={[elW - 0.02, elH - 0.02, t - 0.01]} />
-                  <meshStandardMaterial color={el.type === 'skylight' ? "#eeeeee" : "#222222"} opacity={el.type === 'skylight' ? 0.9 : 0.6} transparent roughness={0.1} metalness={0.9} />
-                </mesh>
-                <mesh position={[0, 0, 0]}>
                   <boxGeometry args={[elW, 0.04, t + 0.02]} />
-                  <meshStandardMaterial color={el.type === 'pvc-window' ? "#ffffff" : "#444444"} />
+                  <meshStandardMaterial color={frameColor} roughness={0.3} metalness={0.6} />
                 </mesh>
-                <mesh position={[0, 0, 0]}>
+                {/* Vertical frame */}
+                <mesh>
                   <boxGeometry args={[0.04, elH, t + 0.02]} />
-                  <meshStandardMaterial color={el.type === 'pvc-window' ? "#ffffff" : "#444444"} />
+                  <meshStandardMaterial color={frameColor} roughness={0.3} metalness={0.6} />
+                </mesh>
+                {/* Outer frame */}
+                <mesh>
+                  <boxGeometry args={[elW + 0.02, elH + 0.02, 0.02]} />
+                  <meshStandardMaterial color={frameColor} roughness={0.3} metalness={0.6} />
                 </mesh>
               </group>
             );
           } else if (el.type === 'gate') {
-            const modifiedEl = { ...el, x: xPos * 100 };
-            return <AnimatedGate key={el.id} el={modifiedEl} config={config} doorMat={doorMat} garageHeight={config.height} />;
+            return <AnimatedGate key={el.id} el={{...el, x: xPos * 100}} gateMat={gateMat} garageHeight={config.height} />;
           } else {
+            // Door
             return (
-              <mesh key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
-                <boxGeometry args={[elW - 0.02, elH - 0.02, t + 0.01]} />
-                {doorMat}
-              </mesh>
+              <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
+                <mesh castShadow receiveShadow>
+                  <boxGeometry args={[elW - 0.02, elH - 0.02, t + 0.01]} />
+                  {doorMat}
+                </mesh>
+                {/* Door handle */}
+                <mesh position={[elW / 2 - 0.08, 0, t / 2 + 0.02]}>
+                  <boxGeometry args={[0.02, 0.12, 0.03]} />
+                  <meshStandardMaterial color="#888" roughness={0.3} metalness={0.9} />
+                </mesh>
+              </group>
             );
           }
         })}
@@ -318,22 +351,21 @@ export default function GarageModel({ config }: GarageModelProps) {
     );
   };
 
-  // ROOF GENERATION
+  // ── Roof ──
   const renderRoof = () => {
-    const rT = config.roofType;
-    const gutterMat = <meshStandardMaterial color="#3b3b3c" roughness={0.8} />;
-    const rL = l + 0.4;
-    const rW = w + 0.4;
+    const gutterMat = <meshStandardMaterial color="#3b3b3c" roughness={0.7} metalness={0.5} />;
+    const rL = l + 0.4; // overhang length
+    const rW = w + 0.4; // overhang width
 
-    if (rT === 'dual-slope') {
+    if (config.roofType === 'dual-slope') {
       const roofShape = new THREE.Shape();
-      roofShape.moveTo(-rW / 2, 0); 
+      roofShape.moveTo(-rW / 2, 0);
       roofShape.lineTo(0, slopeH);
       roofShape.lineTo(rW / 2, 0);
       roofShape.lineTo(rW / 2, t);
       roofShape.lineTo(0, slopeH + t);
       roofShape.lineTo(-rW / 2, t);
-      roofShape.lineTo(-rW / 2, 0);
+      roofShape.closePath();
       
       return (
         <group position={[0, h, -rL / 2]}>
@@ -343,89 +375,119 @@ export default function GarageModel({ config }: GarageModelProps) {
           </mesh>
           {config.gutters && (
             <>
-              <mesh position={[-rW / 2 + 0.1, t/2, rL/2]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
-              <mesh position={[rW / 2 - 0.1, t/2, rL/2]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
-              <mesh position={[-rW / 2 + 0.1, -h/2, 0]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh>
-              <mesh position={[rW / 2 - 0.1, -h/2, 0]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh>
+              <mesh position={[-rW / 2 + 0.1, t / 2, rL / 2]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
+              <mesh position={[rW / 2 - 0.1, t / 2, rL / 2]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
+              <mesh position={[-rW / 2 + 0.1, -h / 2, 0]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh>
+              <mesh position={[rW / 2 - 0.1, -h / 2, 0]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh>
             </>
           )}
         </group>
       );
     }
-    
-    // Sloped flat roofs
-    let rotX = 0, rotZ = 0;
-    let gutterLine = null;
-    let downspouts = [];
-    let yOffset = h + slopeH / 2;
-    
-    // Calculate the exact angle using Math.atan((frontHeight - rearHeight) / garageLength)
-    const exactAngleX = Math.atan((leftFrontH - leftRearH) / l);
 
-    if (rT === 'slope-back' || rT === 'slope-front') {
-      // Apply it to the roof's X-axis rotation. Negative sign because in Three.js right-handed system,
-      // negative X-rotation lifts the front (+Z) up.
-      rotX = -exactAngleX;
-      // Calculate exact Y offset so the roof bottom sits perfectly flush with the slanted wall top
-      yOffset = (leftFrontH + leftRearH) / 2 + (t / 2) / Math.cos(rotX);
+    // ── Mono-slope roofs ──
+    let rotX = 0, rotZ = 0;
+
+    // Side wall front/rear heights are used for slope angle
+    const leftFrontH = hFL;
+    const leftRearH = hBL;
+    const rightFrontH = hFR;
+    const rightRearH = hBR;
+
+    if (config.roofType === 'slope-front' || config.roofType === 'slope-back') {
+      const angleX = Math.atan((leftFrontH - leftRearH) / l);
+      rotX = -angleX;
+    } else if (config.roofType === 'slope-left' || config.roofType === 'slope-right') {
+      const angleZ = Math.atan((hFL - hFR) / w);
+      rotZ = angleZ;
     }
 
-    if (rT === 'slope-back') {
-      if (config.gutters) {
-        gutterLine = [0, h - 0.05, -l/2 - 0.1, 0, Math.PI/2, rW];
-        downspouts.push([-w/2, h/2, -l/2 - 0.1, h]);
+    // Y position: average of all 4 corners plus half-thickness offset
+    const avgH = (hFL + hFR + hBL + hBR) / 4;
+    const cosAngle = Math.max(Math.cos(rotX), Math.cos(rotZ));
+    const yOffset = avgH + (t / 2) / (cosAngle || 1);
+
+    // Determine gutter position
+    let gutterGroup = null;
+    if (config.gutters) {
+      const gutterElements: ReactNode[] = [];
+      
+      if (config.roofType === 'slope-front') {
+        // Gutter on FRONT (low side)
+        gutterElements.push(
+          <mesh key="g" position={[0, h - 0.05, l / 2 + 0.15]} rotation={[0, 0, 0]} castShadow>
+            <boxGeometry args={[rW, 0.08, 0.08]} />
+            {gutterMat}
+          </mesh>,
+          <mesh key="d1" position={[w / 2, h / 2 - 0.02, l / 2 + 0.15]}>
+            <cylinderGeometry args={[0.04, 0.04, h]} />
+            {gutterMat}
+          </mesh>
+        );
+      } else if (config.roofType === 'slope-back') {
+        gutterElements.push(
+          <mesh key="g" position={[0, h - 0.05, -l / 2 - 0.15]} castShadow>
+            <boxGeometry args={[rW, 0.08, 0.08]} />
+            {gutterMat}
+          </mesh>,
+          <mesh key="d1" position={[-w / 2, h / 2 - 0.02, -l / 2 - 0.15]}>
+            <cylinderGeometry args={[0.04, 0.04, h]} />
+            {gutterMat}
+          </mesh>
+        );
+      } else if (config.roofType === 'slope-left') {
+        gutterElements.push(
+          <mesh key="g" position={[-w / 2 - 0.15, h - 0.05, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.05, 0.05, rL]} />
+            {gutterMat}
+          </mesh>,
+          <mesh key="d1" position={[-w / 2 - 0.15, h / 2 - 0.02, -l / 2]}>
+            <cylinderGeometry args={[0.04, 0.04, h]} />
+            {gutterMat}
+          </mesh>
+        );
+      } else if (config.roofType === 'slope-right') {
+        gutterElements.push(
+          <mesh key="g" position={[w / 2 + 0.15, h - 0.05, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.05, 0.05, rL]} />
+            {gutterMat}
+          </mesh>,
+          <mesh key="d1" position={[w / 2 + 0.15, h / 2 - 0.02, l / 2]}>
+            <cylinderGeometry args={[0.04, 0.04, h]} />
+            {gutterMat}
+          </mesh>
+        );
       }
-    } else if (rT === 'slope-front') {
-      if (config.gutters) {
-        gutterLine = [0, h - 0.05, l/2 + 0.1, 0, Math.PI/2, rW];
-        downspouts.push([w/2, h/2, l/2 + 0.1, h]);
-      }
-    } else if (rT === 'slope-left') {
-      rotZ = Math.atan(slopeH / w);
-      yOffset += (t/2) / Math.cos(rotZ);
-      if (config.gutters) {
-        gutterLine = [-w/2 - 0.1, h - 0.05, 0, Math.PI/2, 0, rL];
-        downspouts.push([-w/2 - 0.1, h/2, -l/2, h]);
-      }
-    } else if (rT === 'slope-right') {
-      rotZ = -Math.atan(slopeH / w);
-      yOffset += (t/2) / Math.cos(rotZ);
-      if (config.gutters) {
-        gutterLine = [w/2 + 0.1, h - 0.05, 0, Math.PI/2, 0, rL];
-        downspouts.push([w/2 + 0.1, h/2, l/2, h]);
-      }
+      gutterGroup = <>{gutterElements}</>;
     }
 
     return (
-      <group position={[0, yOffset, 0]}>
-        <mesh rotation={[rotX, 0, rotZ]} castShadow receiveShadow>
+      <group>
+        <mesh position={[0, yOffset, 0]} rotation={[rotX, 0, rotZ]} castShadow receiveShadow>
           <boxGeometry args={[rW, t, rL]} />
           {roofMat}
         </mesh>
-        {gutterLine && (
-          <mesh position={[gutterLine[0]-0, gutterLine[1]-yOffset, gutterLine[2]-0]} rotation={[gutterLine[3], 0, gutterLine[4]]}>
-            <cylinderGeometry args={[0.05, 0.05, gutterLine[5]]} />
-            {gutterMat}
-          </mesh>
-        )}
-        {downspouts.map((ds, i) => (
-          <mesh key={i} position={[ds[0], ds[1]-yOffset, ds[2]]}>
-             <cylinderGeometry args={[0.04, 0.04, ds[3]]} />
-             {gutterMat}
-          </mesh>
-        ))}
+        {gutterGroup}
       </group>
     );
   };
 
+  // ── Front wall shape ──
+  const frontShape = createFBShape(hFL, hFR, frontCenter);
+  // Back wall: when rotated PI, left becomes right visually
+  const backShape = createFBShape(hBR, hBL, backCenter);
+  // Side walls
+  const leftSideShape = createSideShape(hFL, hBL);
+  const rightSideShape = createSideShape(hFR, hBR);
+
   return (
-    <group castShadow receiveShadow>
+    <group>
       
       {/* Front Wall */}
       <mesh position={[0, 0, l / 2 - t]} castShadow receiveShadow>
         <Geometry>
           <Base>
-            <extrudeGeometry args={[createFrontBackWallShape(w, frontL, frontC, frontR), wallExtrudeSettings]} />
+            <extrudeGeometry args={[frontShape, wallExtrude]} />
           </Base>
           {getSubtractions('front')}
         </Geometry>
@@ -437,7 +499,7 @@ export default function GarageModel({ config }: GarageModelProps) {
       <mesh position={[0, 0, -l / 2]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
         <Geometry>
           <Base>
-            <extrudeGeometry args={[createFrontBackWallShape(w, backR, backC, backL), wallExtrudeSettings]} />
+            <extrudeGeometry args={[backShape, wallExtrude]} />
           </Base>
           {getSubtractions('back')}
         </Geometry>
@@ -445,11 +507,11 @@ export default function GarageModel({ config }: GarageModelProps) {
       </mesh>
       {renderElements('back', [0, 0, -l / 2], Math.PI)}
 
-      {/* Left Wall - rotated by +90deg so Shape X points to Rear (-Z), placed at Front Z=l/2 */}
+      {/* Left Wall */}
       <mesh position={[-w / 2 - t, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
         <Geometry>
           <Base>
-            <extrudeGeometry args={[createSideWallShape(l, leftFrontH, leftRearH), wallExtrudeSettings]} />
+            <extrudeGeometry args={[leftSideShape, wallExtrude]} />
           </Base>
           {getSubtractions('left', true, true)}
         </Geometry>
@@ -457,11 +519,11 @@ export default function GarageModel({ config }: GarageModelProps) {
       </mesh>
       {renderElements('left', [-w / 2 - t, 0, l / 2], Math.PI / 2, true, true)}
 
-      {/* Right Wall - rotated by +90deg so Shape X points to Rear (-Z), placed at Front Z=l/2 */}
+      {/* Right Wall */}
       <mesh position={[w / 2, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
         <Geometry>
           <Base>
-            <extrudeGeometry args={[createSideWallShape(l, rightFrontH, rightRearH), wallExtrudeSettings]} />
+            <extrudeGeometry args={[rightSideShape, wallExtrude]} />
           </Base>
           {getSubtractions('right', true, false)}
         </Geometry>
