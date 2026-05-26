@@ -184,7 +184,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 value={gate.gateType} 
                 onChange={(e) => {
                   setSelectedWall('front'); // Focus camera
-                  updateElement(gate.id, { gateType: e.target.value as GateType })
+                  updateElement(gate.id, { gateType: e.target.value as GateType, isOpen: false })
                 }}
                 className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50"
               >
@@ -192,6 +192,17 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 <option value="swing">Dwuskrzydłowa</option>
                 <option value="sectional">Segmentowa</option>
               </select>
+            </div>
+
+            <div className="mb-3">
+              <button 
+                onClick={() => updateElement(gate.id, { isOpen: !gate.isOpen })}
+                className={`w-full py-2 rounded-lg text-sm font-bold transition-colors border ${
+                  gate.isOpen ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                }`}
+              >
+                {gate.isOpen ? 'Zamknij Bramę' : 'Otwórz Bramę'}
+              </button>
             </div>
             
             <div className="grid grid-cols-2 gap-4 mb-3">

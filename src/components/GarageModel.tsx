@@ -69,31 +69,19 @@ function AnimatedGate({ el, config, doorMat, garageHeight }: { el: GarageElement
   const elH = el.height * 0.01;
   const t = 0.05;
 
-  const animState = useRef({ progress: 0, direction: 1, playing: false });
-  const prevGateType = useRef(el.gateType);
-
-  useEffect(() => {
-    if (prevGateType.current !== el.gateType) {
-      prevGateType.current = el.gateType;
-      // Reset immediately to closed
-      animState.current = { progress: 0, direction: 1, playing: true };
-    }
-  }, [el.gateType]);
+  const animState = useRef({ progress: el.isOpen ? 1 : 0 });
 
   useFrame((_, delta) => {
     if (!ref.current) return;
     
-    if (animState.current.playing) {
-      // 2 seconds per cycle
-      animState.current.progress += delta * 0.5 * animState.current.direction;
-      
-      if (animState.current.progress >= 1) {
-        animState.current.progress = 1;
-        animState.current.direction = -1; // reverse to close
-      } else if (animState.current.progress <= 0 && animState.current.direction === -1) {
-        animState.current.progress = 0;
-        animState.current.playing = false; // finished cycle
-      }
+    // Interpolate towards target
+    const target = el.isOpen ? 1 : 0;
+    if (animState.current.progress < target) {
+      animState.current.progress += delta * 1.5;
+      if (animState.current.progress > target) animState.current.progress = target;
+    } else if (animState.current.progress > target) {
+      animState.current.progress -= delta * 1.5;
+      if (animState.current.progress < target) animState.current.progress = target;
     }
 
     const phase = animState.current.progress;

@@ -22,6 +22,7 @@ export interface GarageElement {
   // Specifics
   gateType?: GateType;
   clearanceHeight?: number; // for gates
+  isOpen?: boolean; // gate open/close state
   paneCount?: number; // for windows
 }
 

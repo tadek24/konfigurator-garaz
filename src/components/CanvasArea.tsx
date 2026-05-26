@@ -2,6 +2,7 @@
 
 import { Canvas, useThree } from '@react-three/fiber';
 import { CameraControls, ContactShadows, Environment } from '@react-three/drei';
+import * as THREE from 'three';
 import { GarageConfig, WallFace } from '@/types';
 import GarageModel from './GarageModel';
 import { Suspense, useEffect, useRef } from 'react';
@@ -71,8 +72,11 @@ export default function CanvasArea({ config, selectedWall }: CanvasAreaProps) {
       shadows
       className="w-full h-full"
     >
-      <color attach="background" args={['#18181b']} />
-      
+      {/* Sky / Environment Sphere Backdrop */}
+      <mesh>
+        <sphereGeometry args={[500, 32, 32]} />
+        <meshBasicMaterial color="#1e1e24" side={THREE.BackSide} />
+      </mesh>
       <ambientLight intensity={0.4} />
       <directionalLight
         position={[10, 15, 10]}
