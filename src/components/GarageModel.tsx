@@ -89,36 +89,30 @@ function AnimatedGate({ el, gateMat, garageHeight }: { el: GarageElement; gateMa
         pivot.rotation.x = -phase * (Math.PI / 2);
       }
     } else if (el.gateType === 'sectional') {
-      // Sectional gate - slides up then curves under ceiling
+      // Sectional gate: slides up to ceiling, then translates inward under the ceiling
       const door = ref.current.children[0];
       if (door) {
         const ceilingH = garageHeight * 0.01;
+        // The gate center can go up to ceilingH - elH/2 at most
+        const maxCenterY = ceilingH - elH / 2 - 0.02;
         
-        // Phase 0..0.5: slide up
-        // Phase 0.5..1: curve inward (rotate + translate Z)
-        const slidePhase = Math.min(1, phase * 2);
-        const curvePhase = Math.max(0, (phase - 0.5) * 2);
+        // Phase 0..0.6: slide up vertically from floor to ceiling
+        // Phase 0.6..1.0: translate horizontally inward (along -Z) while staying at ceiling
+        const liftEnd = 0.6;
+        const liftPhase = Math.min(1, phase / liftEnd);
+        const slidePhase = Math.max(0, (phase - liftEnd) / (1 - liftEnd));
         
-        // Vertical slide: from elH/2 up to ceiling - elH/2
-        const maxY = Math.min(ceilingH - 0.05, ceilingH);
-        const slideY = elH / 2 + slidePhase * (maxY - elH / 2 - elH / 2);
+        // Vertical: interpolate from elH/2 to maxCenterY, strictly clamped
+        let finalY = elH / 2 + liftPhase * (maxCenterY - elH / 2);
+        finalY = Math.max(elH / 2, Math.min(finalY, maxCenterY));
         
-        // Curve: rotate around top edge, translating Z inward
-        const theta = curvePhase * (Math.PI / 2);
+        // Horizontal: once at ceiling, slide inward along -Z
+        // Slide distance = roughly the gate height (so it fully enters the garage)
+        const slideDistance = elH + 0.1;
+        const finalZ = -slidePhase * slideDistance;
         
-        let finalY = slideY;
-        let finalZ = 0;
-        
-        if (curvePhase > 0) {
-          // Pivot point is at top of the gate position
-          const pivotY = maxY;
-          const radius = elH / 2;
-          finalY = pivotY - radius * (1 - Math.cos(theta));
-          finalZ = -radius * Math.sin(theta);
-        }
-        
-        // Clamp: never below floor, never above ceiling
-        finalY = Math.max(elH / 2, Math.min(finalY, ceilingH));
+        // Slight rotation to simulate curving (cosmetic, not the primary motion)
+        const theta = slidePhase * (Math.PI / 2) * 0.95;
         
         door.rotation.x = -theta;
         door.position.y = finalY;
@@ -388,24 +382,23 @@ export default function GarageModel({ config }: GarageModelProps) {
     // ── Mono-slope roofs ──
     let rotX = 0, rotZ = 0;
 
-    // Side wall front/rear heights are used for slope angle
-    const leftFrontH = hFL;
-    const leftRearH = hBL;
-    const rightFrontH = hFR;
-    const rightRearH = hBR;
-
     if (config.roofType === 'slope-front' || config.roofType === 'slope-back') {
-      const angleX = Math.atan((leftFrontH - leftRearH) / l);
+      // Slope along the length axis (Z). Angle from front-to-back height difference.
+      const angleX = Math.atan2(hFL - hBL, l);
       rotX = -angleX;
     } else if (config.roofType === 'slope-left' || config.roofType === 'slope-right') {
-      const angleZ = Math.atan((hFL - hFR) / w);
+      // Slope along the width axis (X). Angle from left-to-right height difference.
+      // hFL is left-front, hFR is right-front. Positive angleZ tilts left side up.
+      const angleZ = Math.atan2(hFL - hFR, w);
       rotZ = angleZ;
     }
 
-    // Y position: average of all 4 corners plus half-thickness offset
+    // Y position: average of all 4 corner heights, offset by half-thickness / cos(tilt)
     const avgH = (hFL + hFR + hBL + hBR) / 4;
-    const cosAngle = Math.max(Math.cos(rotX), Math.cos(rotZ));
-    const yOffset = avgH + (t / 2) / (cosAngle || 1);
+    // Use the actual tilt angle (whichever axis is non-zero) for the thickness correction
+    const tiltAngle = Math.abs(rotX) + Math.abs(rotZ); // only one will be non-zero
+    const cosAngle = Math.cos(tiltAngle) || 1;
+    const yOffset = avgH + (t / 2) / cosAngle;
 
     // Determine gutter position
     let gutterGroup = null;
