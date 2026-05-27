@@ -32,29 +32,28 @@ export interface GarageElement {
 }
 
 export interface GarageConfig {
-  width: number;  // in cm
-  length: number; // in cm
-  height: number; // in cm
-  roofType: RoofType;
+  width: number;
+  length: number;
+  height: number;
+  roofType: string;
   gutters: boolean;
   elements: GarageElement[];
 
-  // Independent surface customization
+  // ── Nowe, wymagane pola dla kolorów i struktur ──
   roofColor: string;
-  roofProfile: RoofProfile;
+  roofProfile: string;
 
   wallColor: string;
-  wallProfile: WallProfile;
+  wallProfile: string;
 
   gateColor: string;
-  gateProfile: GateProfile;
+  gateProfile: string;
 
   doorColor: string;
-  doorProfile: DoorProfile;
+  doorProfile: string;
 
-  windowColor: string; // RAL color for window frames
+  windowColor: string;
 }
-
 // Legacy compatibility aliases - keep these so old references don't break
 export type TextureFinish = 'trapezowa' | 'drewnopodobna' | 'rabek' | 'blachodachowka' | 'ocynk';
 export type CorrugationPattern = 'vertical-t7' | 'horizontal-t7' | 'vertical-t14' | 'horizontal-t14';
