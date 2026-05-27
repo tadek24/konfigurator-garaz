@@ -147,30 +147,52 @@ export default function GarageModel({ config }: GarageModelProps) {
   const t = 0.05;     
   const slopeH = 0.4; 
 
-  // ŁADOWANIE TWOICH TEKSTUR
-  const [trapezTex, trawaTex] = useTexture([
+  // ŁADOWANIE WSZYSTKICH TEKSTUR (Blacha, Trawa, Drewno)
+  const [trapezTex, trawaTex, woodColor, woodNormal] = useTexture([
     '/textures/trapez.jpg',
-    '/textures/trawa.jpg'
+    '/textures/trawa.jpg',
+    '/textures/drewno-color.jpg',
+    '/textures/drewno-normal.jpg'
   ]);
 
-  // ZAPĘTLANIE TEKSTUR, żeby się nie rozciągały
+  // USTAWIENIA ZAPĘTLANIA DLA KAŻDEGO MATERIAŁU
   useMemo(() => {
     trapezTex.wrapS = trapezTex.wrapT = THREE.RepeatWrapping;
-    trapezTex.repeat.set(4, 4); // Zmień na np. 6,6 jeśli paski będą za grube
+    trapezTex.repeat.set(4, 4);
     
     trawaTex.wrapS = trawaTex.wrapT = THREE.RepeatWrapping;
-    trawaTex.repeat.set(30, 30); // Trawa powtarzana 30 razy, bo ziemia jest bardzo duża
-  }, [trapezTex, trawaTex]);
+    trawaTex.repeat.set(30, 30);
 
-  const effWallColor = config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor;
+    woodColor.wrapS = woodColor.wrapT = THREE.RepeatWrapping;
+    woodNormal.wrapS = woodNormal.wrapT = THREE.RepeatWrapping;
+    // Drewno powtarzamy nieco rzadziej (np. 2, 2), żeby słoje nie były mikroskopijne
+    woodColor.repeat.set(2, 2);
+    woodNormal.repeat.set(2, 2);
+  }, [trapezTex, trawaTex, woodColor, woodNormal]);
 
-  // Uproszczone właściwości blachy (trapezTex jest naszą mapą koloru i struktury)
-  const matProps = { roughness: 0.4, metalness: 0.6, envMapIntensity: 1.5 };
-  
-  const wallMat = <meshStandardMaterial map={trapezTex} color={effWallColor} {...matProps} side={THREE.DoubleSide} />;
-  const roofMat = <meshStandardMaterial map={trapezTex} color={config.roofColor} {...matProps} side={THREE.DoubleSide} />;
-  const gateMat = <meshStandardMaterial map={trapezTex} color={config.gateColor} {...matProps} />;
-  const doorMat = <meshStandardMaterial map={trapezTex} color={config.doorColor} {...matProps} />;
+  // DYNAMICZNY GENERATOR MATERIAŁÓW (Wspiera blachę i drewno)
+  const getMaterial = (profileType: string, surfaceColor: string) => {
+    const isWood = profileType === 'drewnopodobna';
+    
+    return (
+      <meshStandardMaterial
+        map={isWood ? woodColor : trapezTex}
+        normalMap={isWood ? woodNormal : undefined} // Mapa normalnych aktywuje się tylko dla drewna
+        normalScale={isWood ? new THREE.Vector2(1.2, 1.2) : undefined} // Siła efektu wypukłości słojów
+        color={isWood ? '#ffffff' : (profileType === 'ocynk' ? '#d4d4d4' : surfaceColor)} 
+        roughness={isWood ? 0.5 : 0.4} // Drewno jest bardziej matowe niż blacha
+        metalness={isWood ? 0.0 : 0.6} // Drewno nie odbija światła jak metal
+        envMapIntensity={1.5}
+        side={THREE.DoubleSide}
+      />
+    );
+  };
+
+  // Generowanie materiałów dla poszczególnych powierzchni
+  const wallMat = getMaterial(config.wallProfile, config.wallColor);
+  const roofMat = getMaterial(config.roofProfile, config.roofColor);
+  const gateMat = getMaterial(config.gateProfile, config.gateColor);
+  const doorMat = getMaterial(config.doorProfile, config.doorColor);
 
   let hFL = h, hFR = h, hBL = h, hBR = h;
   let frontCenter: number | null = null;
@@ -337,7 +359,6 @@ export default function GarageModel({ config }: GarageModelProps) {
     <>
       <Environment preset="city" background blur={0.1} />
       
-      {/* Sceneria - Trawa zamiast asfaltu */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
         <planeGeometry args={[150, 150]} />
         <meshStandardMaterial map={trawaTex} roughness={1} metalness={0} color="#dddddd" />
