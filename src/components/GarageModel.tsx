@@ -5,93 +5,13 @@ import { GarageConfig, WallFace, GarageElement } from '@/types';
 import * as THREE from 'three';
 import { Geometry, Base, Subtraction } from '@react-three/csg';
 import { useFrame } from '@react-three/fiber';
-import { Environment, ContactShadows } from '@react-three/drei';
+import { Environment, ContactShadows, useTexture } from '@react-three/drei';
 
 interface GarageModelProps {
   config: GarageConfig;
 }
 
-// ── Proceduralna tekstura blachy ──────────────────────────
-function createBumpMap(profile: string): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#888888';
-    ctx.fillRect(0, 0, 512, 512);
-
-    if (profile === 'trapez-t14') {
-      for (let i = 0; i < 512; i += 36) {
-        const g = ctx.createLinearGradient(i, 0, i + 36, 0);
-        g.addColorStop(0,    '#555');
-        g.addColorStop(0.25, '#fff');
-        g.addColorStop(0.75, '#fff');
-        g.addColorStop(1,    '#555');
-        ctx.fillStyle = g;
-        ctx.fillRect(i, 0, 36, 512);
-      }
-    } else if (profile === 'trapez-t7') {
-      for (let i = 0; i < 512; i += 22) {
-        const g = ctx.createLinearGradient(i, 0, i + 22, 0);
-        g.addColorStop(0,    '#555');
-        g.addColorStop(0.3,  '#eee');
-        g.addColorStop(0.7,  '#eee');
-        g.addColorStop(1,    '#555');
-        ctx.fillStyle = g;
-        ctx.fillRect(i, 0, 22, 512);
-      }
-    } else if (profile === 'rabek') {
-      ctx.fillStyle = '#777';
-      ctx.fillRect(0, 0, 512, 512);
-      for (let i = 0; i < 512; i += 64) {
-        const g = ctx.createLinearGradient(i, 0, i + 8, 0);
-        g.addColorStop(0, '#fff');
-        g.addColorStop(0.5, '#ccc');
-        g.addColorStop(1, '#888');
-        ctx.fillStyle = g;
-        ctx.fillRect(i, 0, 8, 512);
-      }
-    } else if (profile === 'blachodachowka') {
-      ctx.fillStyle = '#777';
-      ctx.fillRect(0, 0, 512, 512);
-      for (let x = 0; x < 512; x += 64) {
-        for (let y = 0; y < 512; y += 48) {
-          const offsetX = (Math.floor(y / 48) % 2) * 32;
-          ctx.fillStyle = '#bbb';
-          ctx.beginPath();
-          ctx.ellipse(x + offsetX + 32, y + 24, 26, 18, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#999';
-          ctx.beginPath();
-          ctx.ellipse(x + offsetX + 32, y + 24, 18, 12, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    } else if (profile === 'drewnopodobna') {
-      for (let i = 0; i < 512; i += 2) {
-        const lum = 100 + Math.random() * 60;
-        ctx.fillStyle = `rgb(${lum},${lum * 0.6 | 0},${lum * 0.3 | 0})`;
-        if (Math.random() > 0.3) ctx.fillRect(0, i, 512, 1 + Math.random() * 2);
-      }
-    } else if (profile === 'ocynk') {
-      for (let x = 0; x < 512; x += 3) {
-        for (let y = 0; y < 512; y += 3) {
-          const lum = Math.floor(130 + Math.random() * 125);
-          ctx.fillStyle = `rgb(${lum},${lum},${lum})`;
-          ctx.fillRect(x, y, 3, 3);
-        }
-      }
-    }
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(4, 4);
-  return tex;
-}
-
-// ── Brama Segmentowa (Naprawiony margines błędu) ───────────────────────
+// ── Brama Segmentowa ───────────────────────
 const PANEL_COUNT = 5;
 
 function SectionalGate({ el, gateMat }: { el: GarageElement; gateMat: ReactNode; }) {
@@ -114,23 +34,18 @@ function SectionalGate({ el, gateMat }: { el: GarageElement; gateMat: ReactNode;
       const panel = panels[i] as THREE.Group;
       if (!panel) continue;
 
-      const startY = i * panelH + panelH / 2; // Środek panelu
+      const startY = i * panelH + panelH / 2;
       const totalTravel = elH + 0.1; 
       const currentS = startY + p * totalTravel;
-
       const maxY = elH - panelH / 2;
 
-      // DODANO 0.005 marginesu, aby zamkniety górny panel nie obracał się o 90 stopni
       if (currentS <= maxY + 0.005) {
-        // Jedzie w górę
         panel.position.set(0, currentS, 0);
         panel.rotation.x = 0;
       } else {
-        // Skręca pod sufit i chowa się do środka
         const overflow = currentS - maxY;
         panel.position.set(0, maxY, -overflow);
         panel.rotation.x = -Math.PI / 2;
-        // Wyrównanie do wysokości prowadnicy
         panel.position.y = elH - thick / 2;
       }
     }
@@ -179,9 +94,7 @@ function AnimatedGate({ el, gateMat }: { el: GarageElement; gateMat: ReactNode; 
     }
   });
 
-  if (el.gateType === 'sectional') {
-    return <SectionalGate el={el} gateMat={gateMat} />;
-  }
+  if (el.gateType === 'sectional') return <SectionalGate el={el} gateMat={gateMat} />;
 
   if (el.gateType === 'swing') {
     return (
@@ -234,21 +147,31 @@ export default function GarageModel({ config }: GarageModelProps) {
   const t = 0.05;     
   const slopeH = 0.4; 
 
-  const wallBump = useMemo(() => createBumpMap(config.wallProfile), [config.wallProfile]);
-  const roofBump = useMemo(() => createBumpMap(config.roofProfile), [config.roofProfile]);
-  const gateBump = useMemo(() => createBumpMap(config.gateProfile), [config.gateProfile]);
-  const doorBump = useMemo(() => createBumpMap(config.doorProfile), [config.doorProfile]);
+  // ŁADOWANIE TWOICH TEKSTUR
+  const [trapezTex, trawaTex] = useTexture([
+    '/textures/trapez.jpg',
+    '/textures/trawa.jpg'
+  ]);
+
+  // ZAPĘTLANIE TEKSTUR, żeby się nie rozciągały
+  useMemo(() => {
+    trapezTex.wrapS = trapezTex.wrapT = THREE.RepeatWrapping;
+    trapezTex.repeat.set(4, 4); // Zmień na np. 6,6 jeśli paski będą za grube
+    
+    trawaTex.wrapS = trawaTex.wrapT = THREE.RepeatWrapping;
+    trawaTex.repeat.set(30, 30); // Trawa powtarzana 30 razy, bo ziemia jest bardzo duża
+  }, [trapezTex, trawaTex]);
 
   const effWallColor = config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor;
 
-  const matProps = { roughness: 0.2, metalness: 0.9, envMapIntensity: 2.5, bumpScale: 0.08 };
+  // Uproszczone właściwości blachy (trapezTex jest naszą mapą koloru i struktury)
+  const matProps = { roughness: 0.4, metalness: 0.6, envMapIntensity: 1.5 };
   
-  const wallMat = <meshStandardMaterial color={effWallColor} {...matProps} bumpMap={wallBump} side={THREE.DoubleSide} />;
-  const roofMat = <meshStandardMaterial color={config.roofColor} {...matProps} bumpMap={roofBump} side={THREE.DoubleSide} />;
-  const gateMat = <meshStandardMaterial color={config.gateColor} {...matProps} bumpMap={gateBump} />;
-  const doorMat = <meshStandardMaterial color={config.doorColor} {...matProps} bumpMap={doorBump} />;
+  const wallMat = <meshStandardMaterial map={trapezTex} color={effWallColor} {...matProps} side={THREE.DoubleSide} />;
+  const roofMat = <meshStandardMaterial map={trapezTex} color={config.roofColor} {...matProps} side={THREE.DoubleSide} />;
+  const gateMat = <meshStandardMaterial map={trapezTex} color={config.gateColor} {...matProps} />;
+  const doorMat = <meshStandardMaterial map={trapezTex} color={config.doorColor} {...matProps} />;
 
-  // ── Naprawione i w pełni kuloodporne nazewnictwo dachów ────────────────────
   let hFL = h, hFR = h, hBL = h, hBR = h;
   let frontCenter: number | null = null;
   let backCenter:  number | null = null;
@@ -414,12 +337,11 @@ export default function GarageModel({ config }: GarageModelProps) {
     <>
       <Environment preset="city" background blur={0.1} />
       
-      {/* Sceneria - Asfalt z subtelną siatką */}
+      {/* Sceneria - Trawa zamiast asfaltu */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
         <planeGeometry args={[150, 150]} />
-        <meshStandardMaterial color="#2a2a2a" roughness={0.9} metalness={0.1} />
+        <meshStandardMaterial map={trawaTex} roughness={1} metalness={0} color="#dddddd" />
       </mesh>
-      <gridHelper args={[150, 150, '#3a3a3a', '#303030']} position={[0, 0, 0]} />
 
       <ContactShadows resolution={1024} scale={20} blur={2} opacity={0.6} far={10} color="#000000" />
       
