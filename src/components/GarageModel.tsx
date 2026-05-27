@@ -11,7 +11,7 @@ interface GarageModelProps {
   config: GarageConfig;
 }
 
-// ── Brama Segmentowa (Zintegrowana z inline obsługą tekstur) ───────────────────────
+// ── Brama Segmentowa ───────────────────────
 const PANEL_COUNT = 5;
 
 function SectionalGate({ el, woodColor, woodNormal, trapezTex, config }: { 
@@ -68,9 +68,10 @@ function SectionalGate({ el, woodColor, woodNormal, trapezTex, config }: {
             <meshStandardMaterial
               map={isWood ? woodColor : trapezTex}
               normalMap={isWood ? woodNormal : undefined}
-              normalScale={isWood ? new THREE.Vector2(1.2, 1.2) : undefined}
-              color={isWood ? '#ffffff' : (config.gateProfile === 'ocynk' ? '#d4d4d4' : config.gateColor)}
-              roughness={isWood ? 0.5 : 0.4}
+              normalScale={isWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+              // ODBLOKOWANE KOLORY DREWNA:
+              color={config.gateProfile === 'ocynk' ? '#d4d4d4' : config.gateColor}
+              roughness={isWood ? 0.7 : 0.4}
               metalness={isWood ? 0.0 : 0.6}
               envMapIntensity={1.5}
             />
@@ -126,9 +127,10 @@ function AnimatedGate({ el, woodColor, woodNormal, trapezTex, config }: {
     <meshStandardMaterial
       map={isWood ? woodColor : trapezTex}
       normalMap={isWood ? woodNormal : undefined}
-      normalScale={isWood ? new THREE.Vector2(1.2, 1.2) : undefined}
-      color={isWood ? '#ffffff' : (config.gateProfile === 'ocynk' ? '#d4d4d4' : config.gateColor)}
-      roughness={isWood ? 0.5 : 0.4}
+      normalScale={isWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+      // ODBLOKOWANE KOLORY DREWNA:
+      color={config.gateProfile === 'ocynk' ? '#d4d4d4' : config.gateColor}
+      roughness={isWood ? 0.7 : 0.4}
       metalness={isWood ? 0.0 : 0.6}
       envMapIntensity={1.5}
     />
@@ -185,7 +187,6 @@ export default function GarageModel({ config }: GarageModelProps) {
   const t = 0.05;     
   const slopeH = 0.4; 
 
-  // Ładowanie tekstur z optymalnych plików WebP/JPG
   const [trapezTex, trawaTex, woodColor, woodNormal] = useTexture([
     '/textures/trapez.jpg',
     '/textures/trawa.jpg',
@@ -206,7 +207,6 @@ export default function GarageModel({ config }: GarageModelProps) {
     woodNormal.repeat.set(2, 2);
   }, [trapezTex, trawaTex, woodColor, woodNormal]);
 
-  // Stan wyliczenia wysokości ścian konstrukcyjnych
   let hFL = h, hFR = h, hBL = h, hBR = h;
   let frontCenter: number | null = null;
   let backCenter:  number | null = null;
@@ -231,13 +231,14 @@ export default function GarageModel({ config }: GarageModelProps) {
     hFL = h + slopeH; hBL = h + slopeH;
   }
 
+  // NAPRAWA ROGÓW (Zipper artifact): Poszerzamy ściany frontowe/tylne o grubość ścian bocznych, aby robiły za zaślepki
   const createFBShape = (leftH: number, rightH: number, centerH: number | null) => {
     const shape = new THREE.Shape();
-    shape.moveTo(-w / 2, 0);
-    shape.lineTo( w / 2, 0);
-    shape.lineTo( w / 2, rightH);
+    shape.moveTo(-w / 2 - t, 0); 
+    shape.lineTo( w / 2 + t, 0);
+    shape.lineTo( w / 2 + t, rightH);
     if (centerH !== null) shape.lineTo(0, centerH);
-    shape.lineTo(-w / 2, leftH);
+    shape.lineTo(-w / 2 - t, leftH);
     shape.closePath();
     return shape;
   };
@@ -303,8 +304,10 @@ export default function GarageModel({ config }: GarageModelProps) {
                   <meshStandardMaterial
                     map={isDoorWood ? woodColor : trapezTex}
                     normalMap={isDoorWood ? woodNormal : undefined}
-                    color={isDoorWood ? '#ffffff' : (config.doorProfile === 'ocynk' ? '#d4d4d4' : config.doorColor)}
-                    roughness={isDoorWood ? 0.5 : 0.4}
+                    normalScale={isDoorWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+                    // ODBLOKOWANE KOLORY DREWNA:
+                    color={config.doorProfile === 'ocynk' ? '#d4d4d4' : config.doorColor}
+                    roughness={isDoorWood ? 0.7 : 0.4}
                     metalness={isDoorWood ? 0.0 : 0.6}
                     envMapIntensity={1.5}
                   />
@@ -340,8 +343,10 @@ export default function GarageModel({ config }: GarageModelProps) {
             <meshStandardMaterial
               map={isRoofWood ? woodColor : trapezTex}
               normalMap={isRoofWood ? woodNormal : undefined}
-              color={isRoofWood ? '#ffffff' : config.roofColor}
-              roughness={isRoofWood ? 0.5 : 0.4}
+              normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+              // ODBLOKOWANE KOLORY DREWNA:
+              color={config.roofProfile === 'ocynk' ? '#d4d4d4' : config.roofColor}
+              roughness={isRoofWood ? 0.7 : 0.4}
               metalness={isRoofWood ? 0.0 : 0.6}
               envMapIntensity={1.5}
               side={THREE.DoubleSide}
@@ -362,7 +367,6 @@ export default function GarageModel({ config }: GarageModelProps) {
     let roofRotX = 0, roofRotZ = 0;
     let gutterMesh = null, downspouts = null;
 
-    // Korekta wyrównania rogów poprzez precyzyjną matematykę offsetów kątowych
     if (isFront) {
       roofRotX = Math.atan2(slopeH, l);
       gutterMesh = <mesh position={[0, -0.02, rL / 2]} rotation={[0, 0, Math.PI / 2]} castShadow><cylinderGeometry args={[0.06, 0.06, rW]} />{gutterMat}</mesh>;
@@ -381,7 +385,6 @@ export default function GarageModel({ config }: GarageModelProps) {
       downspouts = <><mesh position={[w/2 + 0.15, h/2, l/2 - 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh><mesh position={[w/2 + 0.15, h/2, -l/2 + 0.1]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh></>;
     }
 
-    // Wyliczenie pozycji, która eliminuje przesunięcie poziome dachu przy obrocie
     const zOffset = isFront ? -(t / 2) * Math.sin(roofRotX) : (isBack ? (t / 2) * Math.sin(Math.abs(roofRotX)) : 0);
     const xOffset = isLeft ? (t / 2) * Math.sin(roofRotZ) : (isRight ? -(t / 2) * Math.sin(Math.abs(roofRotZ)) : 0);
 
@@ -392,8 +395,10 @@ export default function GarageModel({ config }: GarageModelProps) {
           <meshStandardMaterial
             map={isRoofWood ? woodColor : trapezTex}
             normalMap={isRoofWood ? woodNormal : undefined}
-            color={isRoofWood ? '#ffffff' : config.roofColor}
-            roughness={isRoofWood ? 0.5 : 0.4}
+            normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+            // ODBLOKOWANE KOLORY DREWNA:
+            color={config.roofProfile === 'ocynk' ? '#d4d4d4' : config.roofColor}
+            roughness={isRoofWood ? 0.7 : 0.4}
             metalness={isRoofWood ? 0.0 : 0.6}
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
@@ -419,7 +424,6 @@ export default function GarageModel({ config }: GarageModelProps) {
       <ContactShadows resolution={1024} scale={20} blur={2} opacity={0.6} far={10} color="#000000" />
       
       <group>
-        {/* Front Wall z INLINE materiałem */}
         <mesh position={[0, 0, l / 2 - t]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[frontShape, wallExtrude]} /></Base>
@@ -428,8 +432,10 @@ export default function GarageModel({ config }: GarageModelProps) {
           <meshStandardMaterial
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
-            color={isWallWood ? '#ffffff' : (config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor)}
-            roughness={isWallWood ? 0.5 : 0.4}
+            normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+            // ODBLOKOWANE KOLORY DREWNA:
+            color={config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor}
+            roughness={isWallWood ? 0.7 : 0.4}
             metalness={isWallWood ? 0.0 : 0.6}
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
@@ -437,7 +443,6 @@ export default function GarageModel({ config }: GarageModelProps) {
         </mesh>
         {renderElements('front', [0, 0, l / 2 - t], 0)}
 
-        {/* Back Wall z INLINE materiałem */}
         <mesh position={[0, 0, -l / 2]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[backShape, wallExtrude]} /></Base>
@@ -446,8 +451,9 @@ export default function GarageModel({ config }: GarageModelProps) {
           <meshStandardMaterial
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
-            color={isWallWood ? '#ffffff' : (config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor)}
-            roughness={isWallWood ? 0.5 : 0.4}
+            normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+            color={config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor}
+            roughness={isWallWood ? 0.7 : 0.4}
             metalness={isWallWood ? 0.0 : 0.6}
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
@@ -455,7 +461,6 @@ export default function GarageModel({ config }: GarageModelProps) {
         </mesh>
         {renderElements('back', [0, 0, -l / 2], Math.PI)}
 
-        {/* Left Wall z INLINE materiałem */}
         <mesh position={[-w / 2 - t, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[leftSideShape, wallExtrude]} /></Base>
@@ -464,8 +469,9 @@ export default function GarageModel({ config }: GarageModelProps) {
           <meshStandardMaterial
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
-            color={isWallWood ? '#ffffff' : (config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor)}
-            roughness={isWallWood ? 0.5 : 0.4}
+            normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+            color={config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor}
+            roughness={isWallWood ? 0.7 : 0.4}
             metalness={isWallWood ? 0.0 : 0.6}
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
@@ -473,7 +479,6 @@ export default function GarageModel({ config }: GarageModelProps) {
         </mesh>
         {renderElements('left', [-w / 2 - t, 0, l / 2], Math.PI / 2, true, true)}
 
-        {/* Right Wall z INLINE materiałem */}
         <mesh position={[w / 2, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[rightSideShape, wallExtrude]} /></Base>
@@ -482,8 +487,9 @@ export default function GarageModel({ config }: GarageModelProps) {
           <meshStandardMaterial
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
-            color={isWallWood ? '#ffffff' : (config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor)}
-            roughness={isWallWood ? 0.5 : 0.4}
+            normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+            color={config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor}
+            roughness={isWallWood ? 0.7 : 0.4}
             metalness={isWallWood ? 0.0 : 0.6}
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
