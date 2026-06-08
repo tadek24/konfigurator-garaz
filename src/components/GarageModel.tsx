@@ -337,11 +337,7 @@ export default function GarageModel({ config }: GarageModelProps) {
         <group position={[0, h, -rL / 2]}>
           <mesh castShadow receiveShadow>
             <extrudeGeometry args={[roofShape, { depth: rL, bevelEnabled: false }]} />
-            
-            {/* Obróbka blacharska frontu/tyłu (Gładka) */}
             <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} />
-            
-            {/* Tekstura na połaciach dachu */}
             <meshStandardMaterial attach="material-1"
               map={isRoofWood ? woodColor : trapezTex}
               normalMap={isRoofWood ? woodNormal : undefined}
@@ -393,8 +389,6 @@ export default function GarageModel({ config }: GarageModelProps) {
       <group>
         <mesh position={[xOffset, h + slopeH / 2 + t / 2, zOffset]} rotation={[roofRotX, 0, roofRotZ]} castShadow receiveShadow>
           <boxGeometry args={[rW, t, rL]} />
-          
-          {/* BoxGeometry ma 6 ścian. Tylko góra (index 2) dostaje teksturę. Reszta to obróbka blacharska. */}
           <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} />
           <meshStandardMaterial attach="material-1" color={roofFasciaColor} roughness={0.8} metalness={0.2} />
           <meshStandardMaterial attach="material-2" 
@@ -409,7 +403,6 @@ export default function GarageModel({ config }: GarageModelProps) {
           <meshStandardMaterial attach="material-3" color={roofFasciaColor} roughness={0.8} metalness={0.2} />
           <meshStandardMaterial attach="material-4" color={roofFasciaColor} roughness={0.8} metalness={0.2} />
           <meshStandardMaterial attach="material-5" color={roofFasciaColor} roughness={0.8} metalness={0.2} />
-
           {config.gutters && gutterMesh}
         </mesh>
         {config.gutters && downspouts}
@@ -420,11 +413,37 @@ export default function GarageModel({ config }: GarageModelProps) {
   const isWallWood = config.wallProfile === 'drewnopodobna';
   const wallBaseColor = config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor;
 
+  // ── OBRÓBKA BLACHARSKA (Maskowanie 4 rogów garażu) ──
+  const renderCornerTrim = (hTrim: number, isLeft: boolean, isFront: boolean) => {
+    const trimW = 0.10; // Szerokość kątownika: 10 cm
+    const trimT = 0.005; 
+    
+    const edgeX = isLeft ? -w/2 - t : w/2 + t;
+    const edgeZ = isFront ? l/2 : -l/2;
+    
+    const dirX = isLeft ? 1 : -1;
+    const dirZ = isFront ? -1 : 1;
+
+    return (
+      <group key={`trim-${isLeft ? 'L' : 'R'}-${isFront ? 'F' : 'B'}`}>
+        <mesh position={[edgeX + dirX * (trimW/2), hTrim/2, edgeZ - dirZ * (trimT/2)]} castShadow>
+          <boxGeometry args={[trimW, hTrim, trimT]} />
+          <meshStandardMaterial color={wallBaseColor} roughness={0.6} metalness={0.4} />
+        </mesh>
+        <mesh position={[edgeX - dirX * (trimT/2), hTrim/2, edgeZ + dirZ * (trimW/2)]} castShadow>
+          <boxGeometry args={[trimT, hTrim, trimW]} />
+          <meshStandardMaterial color={wallBaseColor} roughness={0.6} metalness={0.4} />
+        </mesh>
+      </group>
+    );
+  };
+
   return (
     <>
-      <Environment preset="city" background blur={0.1} />
+      {/* Usunięto background z Environment, by zlikwidować rozmazane miasto */}
+      <Environment preset="city" />
       
-      {/* Ciemniejsze, kontrastowe tło bez migania (Z-fighting naprawiony) */}
+      {/* Nowa, czysta sceneria o głębszym kontraście */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.04, 0]} receiveShadow>
         <planeGeometry args={[150, 150]} />
         <meshStandardMaterial color="#4a4a4a" roughness={0.9} metalness={0.1} />
@@ -433,14 +452,20 @@ export default function GarageModel({ config }: GarageModelProps) {
 
       <ContactShadows resolution={1024} scale={25} blur={2.5} opacity={0.7} far={10} color="#000000" position={[0, 0, 0]} />
       
+      {/* Obróbka blacharska rogów, ukrywająca naciągnięcia tekstur CSG */}
+      {renderCornerTrim(hFL, true, true)}
+      {renderCornerTrim(hFR, false, true)}
+      {renderCornerTrim(hBL, true, false)}
+      {renderCornerTrim(hBR, false, false)}
+
       <group>
+        {/* Ściany z czystym pojedynczym materiałem (odporne na bugi CSG) */}
         <mesh position={[0, 0, l / 2 - t]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[frontShape, wallExtrude]} /></Base>
             {getSubtractions('front')}
           </Geometry>
-          {/* Przód ściany tekstura, kąty/rogi garażu płaska blacha */}
-          <meshStandardMaterial attach="material-0"
+          <meshStandardMaterial
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
             normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
@@ -450,7 +475,6 @@ export default function GarageModel({ config }: GarageModelProps) {
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
           />
-          <meshStandardMaterial attach="material-1" color={wallBaseColor} roughness={0.6} metalness={0.4} />
         </mesh>
         {renderElements('front', [0, 0, l / 2 - t], 0)}
 
@@ -459,7 +483,7 @@ export default function GarageModel({ config }: GarageModelProps) {
             <Base><extrudeGeometry args={[backShape, wallExtrude]} /></Base>
             {getSubtractions('back')}
           </Geometry>
-          <meshStandardMaterial attach="material-0"
+          <meshStandardMaterial
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
             normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
@@ -469,7 +493,6 @@ export default function GarageModel({ config }: GarageModelProps) {
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
           />
-          <meshStandardMaterial attach="material-1" color={wallBaseColor} roughness={0.6} metalness={0.4} />
         </mesh>
         {renderElements('back', [0, 0, -l / 2 + t], Math.PI)}
 
@@ -478,7 +501,7 @@ export default function GarageModel({ config }: GarageModelProps) {
             <Base><extrudeGeometry args={[leftSideShape, wallExtrude]} /></Base>
             {getSubtractions('left', true, true)}
           </Geometry>
-          <meshStandardMaterial attach="material-0"
+          <meshStandardMaterial
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
             normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
@@ -488,7 +511,6 @@ export default function GarageModel({ config }: GarageModelProps) {
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
           />
-          <meshStandardMaterial attach="material-1" color={wallBaseColor} roughness={0.6} metalness={0.4} />
         </mesh>
         {renderElements('left', [-w / 2 - t, 0, l / 2 - t], Math.PI / 2, true, true)}
 
@@ -497,7 +519,7 @@ export default function GarageModel({ config }: GarageModelProps) {
             <Base><extrudeGeometry args={[rightSideShape, wallExtrude]} /></Base>
             {getSubtractions('right', true, false)}
           </Geometry>
-          <meshStandardMaterial attach="material-0"
+          <meshStandardMaterial
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
             normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
@@ -507,7 +529,6 @@ export default function GarageModel({ config }: GarageModelProps) {
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
           />
-          <meshStandardMaterial attach="material-1" color={wallBaseColor} roughness={0.6} metalness={0.4} />
         </mesh>
         {renderElements('right', [w / 2, 0, l / 2 - t], Math.PI / 2, true, false)}
 
