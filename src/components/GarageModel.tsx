@@ -191,7 +191,8 @@ export default function GarageModel({ config }: GarageModelProps) {
     '/textures/drewno-normal.jpg'
   ]);
 
-  useMemo(() => {
+  // Rotacja tekstur dla ukrycia poziomych linii na rogach ścian
+  const { trapezTexSide, woodColorSide, woodNormalSide } = useMemo(() => {
     trapezTex.wrapS = trapezTex.wrapT = THREE.RepeatWrapping;
     trapezTex.repeat.set(4, 4);
 
@@ -199,6 +200,21 @@ export default function GarageModel({ config }: GarageModelProps) {
     woodNormal.wrapS = woodNormal.wrapT = THREE.RepeatWrapping;
     woodColor.repeat.set(2, 2);
     woodNormal.repeat.set(2, 2);
+
+    // Klonujemy tekstury i obracamy o 90 stopni dla bocznych 5cm krawędzi CSG
+    const tSide = trapezTex.clone();
+    tSide.rotation = Math.PI / 2;
+    tSide.needsUpdate = true;
+
+    const wcSide = woodColor.clone();
+    wcSide.rotation = Math.PI / 2;
+    wcSide.needsUpdate = true;
+
+    const wnSide = woodNormal.clone();
+    wnSide.rotation = Math.PI / 2;
+    wnSide.needsUpdate = true;
+
+    return { trapezTexSide: tSide, woodColorSide: wcSide, woodNormalSide: wnSide };
   }, [trapezTex, woodColor, woodNormal]);
 
   let hFL = h, hFR = h, hBL = h, hBR = h;
@@ -225,13 +241,14 @@ export default function GarageModel({ config }: GarageModelProps) {
     hFL = h + slopeH; hBL = h + slopeH;
   }
 
+  // Uproszczona, idealnie dopasowana bryła (bez nakładek narożnikowych)
   const createFBShape = (leftH: number, rightH: number, centerH: number | null) => {
     const shape = new THREE.Shape();
-    shape.moveTo(-w / 2 - t, 0); 
-    shape.lineTo( w / 2 + t, 0);
-    shape.lineTo( w / 2 + t, rightH);
+    shape.moveTo(-w / 2, 0); 
+    shape.lineTo( w / 2, 0);
+    shape.lineTo( w / 2, rightH);
     if (centerH !== null) shape.lineTo(0, centerH);
-    shape.lineTo(-w / 2 - t, leftH);
+    shape.lineTo(-w / 2, leftH);
     shape.closePath();
     return shape;
   };
@@ -239,12 +256,12 @@ export default function GarageModel({ config }: GarageModelProps) {
   const createSideShape = (frontH: number, rearH: number) => {
     const shape = new THREE.Shape();
     const slope = (rearH - frontH) / l;
-    const hF = frontH + slope * t;
-    const hR = rearH - slope * t;
+    const hF = frontH;
+    const hR = rearH;
 
     shape.moveTo(0, 0);
-    shape.lineTo(l - 2 * t, 0);
-    shape.lineTo(l - 2 * t, hR);
+    shape.lineTo(l, 0);
+    shape.lineTo(l, hR);
     shape.lineTo(0, hF);
     shape.closePath();
     return shape;
@@ -260,7 +277,7 @@ export default function GarageModel({ config }: GarageModelProps) {
   const getSubtractions = (wall: WallFace, isSide = false, isLeft = false) => {
     return config.elements.filter(e => e.wall === wall).map((el, i) => {
       let xShape = el.x * 0.01;
-      if (isSide) xShape = isLeft ? (l / 2 - t - el.x * 0.01) : (l / 2 - t + el.x * 0.01);
+      if (isSide) xShape = isLeft ? (l / 2 - el.x * 0.01) : (l / 2 + el.x * 0.01);
       return (
         <Subtraction key={i} position={[xShape, el.y * 0.01 + (el.height * 0.01) / 2, t / 2]}>
           <boxGeometry args={[el.width * 0.01, el.height * 0.01, t * 4]} />
@@ -275,7 +292,7 @@ export default function GarageModel({ config }: GarageModelProps) {
         {config.elements.filter(e => e.wall === wall).map((el) => {
           const elW = el.width * 0.01; const elH = el.height * 0.01; const elY = el.y * 0.01;
           let xPos = el.x * 0.01;
-          if (isSide) xPos = isLeft ? (l / 2 - t - el.x * 0.01) : (l / 2 - t + el.x * 0.01);
+          if (isSide) xPos = isLeft ? (l / 2 - el.x * 0.01) : (l / 2 + el.x * 0.01);
 
           if (el.type === 'window' || el.type === 'pvc-window' || el.type === 'skylight') {
             const fc = config.windowColor || '#333';
@@ -413,61 +430,43 @@ export default function GarageModel({ config }: GarageModelProps) {
   const isWallWood = config.wallProfile === 'drewnopodobna';
   const wallBaseColor = config.wallProfile === 'ocynk' ? '#d4d4d4' : config.wallColor;
 
-  // ── OBRÓBKA BLACHARSKA (Maskowanie 4 rogów garażu) ──
-  const renderCornerTrim = (hTrim: number, isLeft: boolean, isFront: boolean) => {
-    const trimW = 0.10; // Szerokość kątownika: 10 cm
-    const trimT = 0.005; 
-    
-    const edgeX = isLeft ? -w/2 - t : w/2 + t;
-    const edgeZ = isFront ? l/2 : -l/2;
-    
-    const dirX = isLeft ? 1 : -1;
-    const dirZ = isFront ? -1 : 1;
-
-    return (
-      <group key={`trim-${isLeft ? 'L' : 'R'}-${isFront ? 'F' : 'B'}`}>
-        <mesh position={[edgeX + dirX * (trimW/2), hTrim/2, edgeZ - dirZ * (trimT/2)]} castShadow>
-          <boxGeometry args={[trimW, hTrim, trimT]} />
-          <meshStandardMaterial color={wallBaseColor} roughness={0.6} metalness={0.4} />
-        </mesh>
-        <mesh position={[edgeX - dirX * (trimT/2), hTrim/2, edgeZ + dirZ * (trimW/2)]} castShadow>
-          <boxGeometry args={[trimT, hTrim, trimW]} />
-          <meshStandardMaterial color={wallBaseColor} roughness={0.6} metalness={0.4} />
-        </mesh>
-      </group>
-    );
-  };
-
   return (
     <>
-      {/* Usunięto background z Environment, by zlikwidować rozmazane miasto */}
-      <Environment preset="city" />
+      {/* FORCE BACKGROUND OVERRIDE - To definitywnie usuwa zamazane miasto */}
+      <color attach="background" args={['#e5e7eb']} />
       
-      {/* Nowa, czysta sceneria o głębszym kontraście */}
+      {/* Środowisko generuje TYLKO światło, wyłączamy wyświetlanie tła (background={false}) */}
+      <Environment preset="city" background={false} />
+      
+      {/* Podłoże z siatką projektową */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.04, 0]} receiveShadow>
         <planeGeometry args={[150, 150]} />
-        <meshStandardMaterial color="#4a4a4a" roughness={0.9} metalness={0.1} />
+        <meshStandardMaterial color="#d1d5db" roughness={0.9} metalness={0.1} />
       </mesh>
-      <gridHelper args={[150, 150, '#3a3a3a', '#555555']} position={[0, -0.02, 0]} />
+      <gridHelper args={[150, 150, '#9ca3af', '#e5e7eb']} position={[0, -0.02, 0]} />
 
       <ContactShadows resolution={1024} scale={25} blur={2.5} opacity={0.7} far={10} color="#000000" position={[0, 0, 0]} />
       
-      {/* Obróbka blacharska rogów, ukrywająca naciągnięcia tekstur CSG */}
-      {renderCornerTrim(hFL, true, true)}
-      {renderCornerTrim(hFR, false, true)}
-      {renderCornerTrim(hBL, true, false)}
-      {renderCornerTrim(hBR, false, false)}
-
       <group>
-        {/* Ściany z czystym pojedynczym materiałem (odporne na bugi CSG) */}
+        {/* ŚCIANA FRONTOWA - Zastosowano Array z obróconą teksturą na brzegach (material-1) */}
         <mesh position={[0, 0, l / 2 - t]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[frontShape, wallExtrude]} /></Base>
             {getSubtractions('front')}
           </Geometry>
-          <meshStandardMaterial
+          <meshStandardMaterial attach="material-0"
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
+            normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+            color={isWallWood ? '#ffffff' : wallBaseColor}
+            roughness={isWallWood ? 0.7 : 0.4}
+            metalness={isWallWood ? 0.0 : 0.6}
+            envMapIntensity={1.5}
+            side={THREE.DoubleSide}
+          />
+          <meshStandardMaterial attach="material-1"
+            map={isWallWood ? woodColorSide : trapezTexSide}
+            normalMap={isWallWood ? woodNormalSide : undefined}
             normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
             color={isWallWood ? '#ffffff' : wallBaseColor}
             roughness={isWallWood ? 0.7 : 0.4}
@@ -478,12 +477,13 @@ export default function GarageModel({ config }: GarageModelProps) {
         </mesh>
         {renderElements('front', [0, 0, l / 2 - t], 0)}
 
-        <mesh position={[0, 0, -l / 2 + t]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
+        {/* ŚCIANA TYLNA */}
+        <mesh position={[0, 0, -l / 2]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[backShape, wallExtrude]} /></Base>
             {getSubtractions('back')}
           </Geometry>
-          <meshStandardMaterial
+          <meshStandardMaterial attach="material-0"
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
             normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
@@ -493,15 +493,26 @@ export default function GarageModel({ config }: GarageModelProps) {
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
           />
+          <meshStandardMaterial attach="material-1"
+            map={isWallWood ? woodColorSide : trapezTexSide}
+            normalMap={isWallWood ? woodNormalSide : undefined}
+            normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+            color={isWallWood ? '#ffffff' : wallBaseColor}
+            roughness={isWallWood ? 0.7 : 0.4}
+            metalness={isWallWood ? 0.0 : 0.6}
+            envMapIntensity={1.5}
+            side={THREE.DoubleSide}
+          />
         </mesh>
-        {renderElements('back', [0, 0, -l / 2 + t], Math.PI)}
+        {renderElements('back', [0, 0, -l / 2], Math.PI)}
 
-        <mesh position={[-w / 2 - t, 0, l / 2 - t]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
+        {/* ŚCIANA LEWA */}
+        <mesh position={[-w / 2, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[leftSideShape, wallExtrude]} /></Base>
             {getSubtractions('left', true, true)}
           </Geometry>
-          <meshStandardMaterial
+          <meshStandardMaterial attach="material-0"
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
             normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
@@ -511,15 +522,26 @@ export default function GarageModel({ config }: GarageModelProps) {
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
           />
+          <meshStandardMaterial attach="material-1"
+            map={isWallWood ? woodColorSide : trapezTexSide}
+            normalMap={isWallWood ? woodNormalSide : undefined}
+            normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+            color={isWallWood ? '#ffffff' : wallBaseColor}
+            roughness={isWallWood ? 0.7 : 0.4}
+            metalness={isWallWood ? 0.0 : 0.6}
+            envMapIntensity={1.5}
+            side={THREE.DoubleSide}
+          />
         </mesh>
-        {renderElements('left', [-w / 2 - t, 0, l / 2 - t], Math.PI / 2, true, true)}
+        {renderElements('left', [-w / 2, 0, l / 2], Math.PI / 2, true, true)}
 
-        <mesh position={[w / 2, 0, l / 2 - t]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
+        {/* ŚCIANA PRAWA */}
+        <mesh position={[w / 2, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[rightSideShape, wallExtrude]} /></Base>
             {getSubtractions('right', true, false)}
           </Geometry>
-          <meshStandardMaterial
+          <meshStandardMaterial attach="material-0"
             map={isWallWood ? woodColor : trapezTex}
             normalMap={isWallWood ? woodNormal : undefined}
             normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
@@ -529,8 +551,18 @@ export default function GarageModel({ config }: GarageModelProps) {
             envMapIntensity={1.5}
             side={THREE.DoubleSide}
           />
+          <meshStandardMaterial attach="material-1"
+            map={isWallWood ? woodColorSide : trapezTexSide}
+            normalMap={isWallWood ? woodNormalSide : undefined}
+            normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+            color={isWallWood ? '#ffffff' : wallBaseColor}
+            roughness={isWallWood ? 0.7 : 0.4}
+            metalness={isWallWood ? 0.0 : 0.6}
+            envMapIntensity={1.5}
+            side={THREE.DoubleSide}
+          />
         </mesh>
-        {renderElements('right', [w / 2, 0, l / 2 - t], Math.PI / 2, true, false)}
+        {renderElements('right', [w / 2, 0, l / 2], Math.PI / 2, true, false)}
 
         {renderRoof()}
       </group>
