@@ -29,6 +29,9 @@ export interface GarageElement {
   clearanceHeight?: number; // for gates
   isOpen?: boolean; // gate open/close state
   paneCount?: number; // for windows
+
+  // ── DODANE: Strona zawiasów dla drzwi i bram ──
+  hingeSide?: 'left' | 'right';
 }
 
 export interface GarageConfig {
@@ -53,7 +56,13 @@ export interface GarageConfig {
   doorProfile: string;
 
   windowColor: string;
+
+  // ── DODANE: Kierunek przetłoczeń blachy ──
+  wallRibbing?: 'vertical' | 'horizontal';
+  gateRibbing?: 'vertical' | 'horizontal';
+  doorRibbing?: 'vertical' | 'horizontal';
 }
+
 // Legacy compatibility aliases - keep these so old references don't break
 export type TextureFinish = 'trapezowa' | 'drewnopodobna' | 'rabek' | 'blachodachowka' | 'ocynk';
 export type CorrugationPattern = 'vertical-t7' | 'horizontal-t7' | 'vertical-t14' | 'horizontal-t14';
