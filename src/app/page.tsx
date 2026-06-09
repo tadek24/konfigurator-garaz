@@ -4,6 +4,7 @@ import { useState, UIEvent } from 'react';
 import { GarageConfig, WallFace } from '@/types';
 import CanvasArea from '@/components/CanvasArea';
 import ConfigPanel from '@/components/ConfigPanel';
+import { usePricing } from '@/context/PricingContext';
 import { v4 as uuidv4 } from 'uuid';
 
 const INITIAL_CONFIG: GarageConfig = {
@@ -55,53 +56,61 @@ export default function Home() {
   const [selectedWall, setSelectedWall] = useState<WallFace>('front');
   const [activeStep, setActiveStep] = useState(1);
 
+  // Cennik z kontekstu (załadowany z localStorage / API)
+  const { pricing } = usePricing();
+
   // Funkcja automatycznie zmieniająca aktywny krok na podstawie scrolla
   const handleScroll = (e: UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
     const scrollableHeight = target.scrollHeight - target.clientHeight;
-    
-    if (scrollableHeight <= 0) return; // Zabezpieczenie braku scrolla
-
+    if (scrollableHeight <= 0) return;
     const scrollPercentage = target.scrollTop / scrollableHeight;
-    
-    // Progi przewijania (możesz je delikatnie dopasować pod wysokość swoich sekcji)
     if (scrollPercentage < 0.20) setActiveStep(1);
     else if (scrollPercentage < 0.50) setActiveStep(2);
     else if (scrollPercentage < 0.80) setActiveStep(3);
     else if (scrollPercentage < 0.98) setActiveStep(4);
-    else setActiveStep(5); // Krok 5 to stan "Gotowe" na samym dole
+    else setActiveStep(5);
   };
 
-  // Pricing Engine
+  // Pricing Engine — wszystkie współczynniki z PricingContext
   const calculatePrice = () => {
-    let base = 2500;
-    
+    const p = pricing; // skrót
+    let total = p.basePrice;
+
     const area = (config.width / 100) * (config.length / 100);
-    base += area * 150; 
-    
+
+    // Cena za m² ścian (baza trapez, dopłata za drewnopodobną)
+    total += area * p.pricePerSqmTrapez;
+    if (config.wallProfile === 'drewnopodobna') total += area * p.pricePerSqmWood;
+
+    // Dopłata za profil dachu
+    if (config.roofProfile === 'blachodachowka') total += area * p.pricePerSqmTile;
+    if (config.roofProfile === 'rabek')          total += area * p.pricePerSqmRabek;
+
+    // Dopłata za wysokość > 220 cm
     if (config.height > 220) {
-      base += (config.height - 220) * 10;
+      total += (config.height - 220) * p.pricePerCmExtraHeight;
     }
 
-    if (config.wallProfile === 'drewnopodobna') base += area * 80;
-    if (config.roofProfile === 'blachodachowka') base += area * 60;
-    if (config.roofProfile === 'rabek') base += area * 40;
-
+    // Elementy (bramy, drzwi, okna)
     config.elements.forEach((el) => {
       if (el.type === 'gate') {
-        base += 1200;
-        if (el.gateType === 'sectional') base += 800;
+        if (el.gateType === 'sectional')   total += p.gateSectional;
+        else if (el.gateType === 'swing')  total += p.gateSwing;
+        else                               total += p.gateUpAndOver;
       }
-      if (el.type === 'door') base += 450;
-      if (el.type === 'window' || el.type === 'pvc-window') base += 350;
-      if (el.type === 'skylight') base += 200;
+      if (el.type === 'door')                     total += p.door;
+      if (el.type === 'window')                   total += p.window;
+      if (el.type === 'pvc-window')               total += p.pvcWindow;
+      if (el.type === 'skylight')                 total += p.skylight;
     });
 
+    // Rynny (dwa biegi wzdłuż długości)
     if (config.gutters) {
-      base += (config.length / 100) * 50 * 2; 
+      total += (config.length / 100) * p.gutterPerMeter * 2;
     }
 
-    return base;
+    return Math.round(total);
   };
 
   return (
