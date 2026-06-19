@@ -62,9 +62,18 @@ function CameraRig({ selectedWall, config }: { selectedWall: WallFace; config: G
   );
 }
 
+// export default function CanvasArea({ config, selectedWall }: CanvasAreaProps) {
+//   return (
+//     <Canvas
+//       camera={{ position: [5, 3, 7], fov: 50 }}
+//       shadows
+//       className="w-full h-full"
+//     >
+
 export default function CanvasArea({ config, selectedWall }: CanvasAreaProps) {
   return (
     <Canvas
+      gl={{ preserveDrawingBuffer: true }} // <--- TO POZWOLI ZROBIĆ ZDJĘCIE DO KOSZYKA
       camera={{ position: [5, 3, 7], fov: 50 }}
       shadows
       className="w-full h-full"
@@ -85,8 +94,8 @@ export default function CanvasArea({ config, selectedWall }: CanvasAreaProps) {
       />
       <directionalLight position={[-5, 8, -5]} intensity={0.3} />
       
-      {/* HDRI as BOTH skybox background AND reflection source */}
-      <Environment preset="sunset" background blur={0.08} />
+      {/* HDRI TYLKO jako źródło refleksów (bez parametru background!) */}
+      <Environment preset="city" />
 
       <Suspense fallback={null}>
         <GarageModel config={config} />

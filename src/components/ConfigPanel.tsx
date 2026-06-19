@@ -4,7 +4,7 @@ import { GarageConfig, RoofType, WallFace, GarageElement, GateType, RoofProfile,
 import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface ConfigPanelProps {
   config: GarageConfig;
@@ -129,6 +129,56 @@ function ColorPicker({ colors, value, onChange, labels }: { colors: string[]; va
   );
 }
 
+// ── KOMPONENT KOSZYKA Z API WOOCOMMERCE ──
+function OrderButton({ config, totalPrice }: { config: GarageConfig; totalPrice: number }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const inputImgRef = useRef<HTMLInputElement>(null);
+
+  const handleOrder = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // 1. Szukamy elementu Canvas na stronie
+    const canvas = document.querySelector('canvas');
+    
+    if (canvas && inputImgRef.current && formRef.current) {
+      // 2. Robimy zdjęcie garażu
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+      
+      // 3. Pakujemy zdjęcie do ukrytego pola
+      inputImgRef.current.value = imageBase64;
+      
+      // 4. Odpalamy formularz do WordPressa
+      formRef.current.submit();
+    } else {
+      alert("Chwilowy błąd pobierania widoku 3D. Upewnij się, że wizualizacja wczytała się poprawnie.");
+    }
+  };
+
+  return (
+    <div className="mt-8 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
+      <div className="flex justify-between items-end mb-4">
+        <span className="text-zinc-500 font-medium">Cena konfiguracji:</span>
+        <span className="text-3xl font-extrabold text-zinc-900">{totalPrice} zł</span>
+      </div>
+      
+      <form ref={formRef} method="POST" action="https://konfigurator.skillup-szkolenia.pl/?add-garage-to-cart=1">
+        <input type="hidden" name="garage_order" value="1" />
+        <input type="hidden" name="garage_price" value={totalPrice} />
+        <input type="hidden" name="garage_config" value={JSON.stringify(config)} />
+        <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
+        
+        <button 
+          onClick={handleOrder} 
+          className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-6 rounded-xl text-lg uppercase transition-colors shadow-md hover:shadow-lg flex justify-center items-center gap-2"
+        >
+          Kupuję i płacę
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ── GŁÓWNY PANEL KONFIGURACYJNY ──
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall }: ConfigPanelProps) {
   
   // Gate height enforcement for slope-front
@@ -219,6 +269,9 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
+  // TUTAJ JEST TWOJA TYMCZASOWA CENA - DO PODMIANY GDY BĘDZIESZ MIAŁ ALGORYTM
+  const currentPrice = 7900; 
+
   return (
     <div className="space-y-4 pb-12">
       
@@ -302,7 +355,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 value={gate.gateType} 
                 onChange={(e) => {
                   setSelectedWall('front');
-                  // Reset animation state when switching gate type
                   updateElement(gate.id, { gateType: e.target.value as GateType, isOpen: false });
                 }}
                 className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50"
@@ -476,7 +528,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                     key={p.value}
                     onClick={() => {
                       const updates: Partial<GarageConfig> = { roofProfile: p.value };
-                      // If blachodachówka, validate color
                       if (p.value === 'blachodachowka') {
                         const tileColorValues = TILE_COLORS.map(c => c.color);
                         if (!tileColorValues.includes(config.roofColor)) {
@@ -689,6 +740,9 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
 
       </Section>
+
+      {/* ── KOSZYK I ZAMÓWIENIE ── */}
+      <OrderButton config={config} totalPrice={currentPrice} />
 
     </div>
   );
