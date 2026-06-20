@@ -80,15 +80,33 @@ function OrderButton({ config, totalPrice }: { config: GarageConfig; totalPrice:
 
   const handleOrder = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!region) return; // Zabezpieczenie przed wymuszeniem kliknięcia
+    if (!region) return;
 
     const canvas = document.querySelector('canvas');
     if (canvas && inputImgRef.current && formRef.current) {
-      const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
-      inputImgRef.current.value = imageBase64;
-      formRef.current.submit();
+      try {
+        // TWORZYMY MINIATURKĘ (Bypass zapór ogniowych i limitów wielkości)
+        const tempCanvas = document.createElement('canvas');
+        const ctx = tempCanvas.getContext('2d');
+        
+        // Skalujemy zdjęcie do max 800px szerokości
+        const scale = Math.min(800 / canvas.width, 1);
+        tempCanvas.width = canvas.width * scale;
+        tempCanvas.height = canvas.height * scale;
+        
+        if (ctx) {
+          ctx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+          // Jakość 0.7 = super mały plik, wysyła się w ułamek sekundy!
+          const imageBase64 = tempCanvas.toDataURL('image/jpeg', 0.7); 
+          
+          inputImgRef.current.value = imageBase64;
+          formRef.current.submit();
+        }
+      } catch (err) {
+        alert("Błąd generowania zdjęcia garażu. Odśwież stronę.");
+      }
     } else {
-      alert("Chwilowy błąd pobierania widoku 3D. Odśwież stronę i spróbuj ponownie.");
+      alert("Chwilowy błąd pobierania widoku 3D. Upewnij się, że garaż załadował się poprawnie.");
     }
   };
 
