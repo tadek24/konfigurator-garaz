@@ -4,7 +4,7 @@ import { GarageConfig, RoofType, WallFace, GarageElement, GateType, RoofProfile,
 import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 
 interface ConfigPanelProps {
   config: GarageConfig;
@@ -20,7 +20,7 @@ const WOJEWODZTWA = [
   "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"
 ];
 
-// ── Roof Type Icons (inline SVG) ──
+// ── Ikony i Słowniki (Bez zmian) ──
 function RoofIcon({ type }: { type: RoofType }) {
   const base = "stroke-current fill-none";
   switch (type) {
@@ -32,14 +32,7 @@ function RoofIcon({ type }: { type: RoofType }) {
   }
 }
 
-const ROOF_TYPES: { type: RoofType; label: string }[] = [
-  { type: 'dual-slope', label: 'Dwuspadowy' },
-  { type: 'slope-front', label: 'Spad w przód' },
-  { type: 'slope-back', label: 'Spad w tył' },
-  { type: 'slope-left', label: 'Spad w lewo' },
-  { type: 'slope-right', label: 'Spad w prawo' },
-];
-
+const ROOF_TYPES: { type: RoofType; label: string }[] = [ { type: 'dual-slope', label: 'Dwuspadowy' }, { type: 'slope-front', label: 'Spad w przód' }, { type: 'slope-back', label: 'Spad w tył' }, { type: 'slope-left', label: 'Spad w lewo' }, { type: 'slope-right', label: 'Spad w prawo' } ];
 const STANDARD_COLORS = ['#e3e3e3', '#3b3b3c', '#4a3028', '#f0f0f0', '#7a2222', '#2f4f4f'];
 const WOOD_COLORS = [{ color: '#4a3028', label: 'Orzech' }, { color: '#6b4423', label: 'Złoty Dąb' }, { color: '#8b5a2b', label: 'Winchester' }, { color: '#3d2314', label: 'Mahoń' }];
 const TILE_COLORS = [{ color: '#8b0000', label: 'Ceglasty' }, { color: '#3b3b3c', label: 'Grafit' }, { color: '#2d4a1e', label: 'Zielony' }, { color: '#4a3028', label: 'Brąz' }, { color: '#d4d4d4', label: 'Ocynk' }];
@@ -62,21 +55,24 @@ function ColorPicker({ colors, value, onChange, labels }: { colors: string[]; va
   return (
     <div className="flex gap-2 flex-wrap">
       {colors.map((color) => (
-        <button
-          key={color} onClick={() => onChange(color)} title={labels?.[color] || color}
-          className={`w-8 h-8 rounded-full border-[3px] shadow-sm transition-transform ${value === color ? 'border-zinc-900 scale-110' : 'border-transparent hover:scale-110'}`}
-          style={{ backgroundColor: color }}
-        />
+        <button key={color} onClick={() => onChange(color)} title={labels?.[color] || color} className={`w-8 h-8 rounded-full border-[3px] shadow-sm transition-transform ${value === color ? 'border-zinc-900 scale-110' : 'border-transparent hover:scale-110'}`} style={{ backgroundColor: color }} />
       ))}
     </div>
   );
 }
 
 // ── KOMPONENT KOSZYKA Z WYBOREM WOJEWÓDZTWA ──
-function OrderButton({ config, totalPrice }: { config: GarageConfig; totalPrice: number }) {
+function OrderButton({ config, totalPrice, isReadOnly }: { config: GarageConfig; totalPrice: number; isReadOnly: boolean }) {
   const formRef = useRef<HTMLFormElement>(null);
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState("");
+  const [targetStoreUrl, setTargetStoreUrl] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const storeUrl = params.get('store_url');
+    setTargetStoreUrl(storeUrl || process.env.NEXT_PUBLIC_WP_URL || "https://konfigurator.skillup-szkolenia.pl/");
+  }, []);
 
   const handleOrder = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -85,41 +81,40 @@ function OrderButton({ config, totalPrice }: { config: GarageConfig; totalPrice:
     const canvas = document.querySelector('canvas');
     if (canvas && inputImgRef.current && formRef.current) {
       try {
-        // TWORZYMY MINIATURKĘ (Bypass zapór ogniowych i limitów wielkości)
         const tempCanvas = document.createElement('canvas');
         const ctx = tempCanvas.getContext('2d');
-        
-        // Skalujemy zdjęcie do max 800px szerokości
         const scale = Math.min(800 / canvas.width, 1);
         tempCanvas.width = canvas.width * scale;
         tempCanvas.height = canvas.height * scale;
         
         if (ctx) {
           ctx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
-          // Jakość 0.7 = super mały plik, wysyła się w ułamek sekundy!
-          const imageBase64 = tempCanvas.toDataURL('image/jpeg', 0.7); 
-          
-          inputImgRef.current.value = imageBase64;
+          inputImgRef.current.value = tempCanvas.toDataURL('image/jpeg', 0.7); 
           formRef.current.submit();
         }
       } catch (err) {
         alert("Błąd generowania zdjęcia garażu. Odśwież stronę.");
       }
     } else {
-      alert("Chwilowy błąd pobierania widoku 3D. Upewnij się, że garaż załadował się poprawnie.");
+      alert("Chwilowy błąd pobierania widoku 3D.");
     }
   };
+
+  // Jeśli to tryb wglądu dla Admina (360 view), chowamy przycisk kupna
+  if (isReadOnly) {
+    return (
+      <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white text-center">
+        <h3 className="font-bold text-xl text-orange-500 mb-2">Tryb Podglądu 360°</h3>
+        <p className="text-zinc-400 text-sm">Oglądasz zapisaną konfigurację klienta z panelu WooCommerce. Możesz obracać model 3D.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
       <div className="flex flex-col gap-2 mb-4">
         <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
-        <select 
-          value={region} 
-          onChange={(e) => setRegion(e.target.value)}
-          className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2 focus:ring-orange-500"
-          required
-        >
+        <select value={region} onChange={(e) => setRegion(e.target.value)} className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2 focus:ring-orange-500" required >
           <option value="" disabled>Wybierz z listy...</option>
           {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
         </select>
@@ -130,21 +125,14 @@ function OrderButton({ config, totalPrice }: { config: GarageConfig; totalPrice:
         <span className="text-3xl font-extrabold text-orange-500">{totalPrice} zł</span>
       </div>
       
-      {/* Akcja kieruje prosto do root, gdzie WooCommerce podsłuchuje template_redirect */}
-      <form ref={formRef} method="POST" action="https://konfigurator.skillup-szkolenia.pl/">
+      <form ref={formRef} method="POST" action={targetStoreUrl} target="_parent">
         <input type="hidden" name="custom_garage_checkout" value="1" />
         <input type="hidden" name="garage_price" value={totalPrice} />
         <input type="hidden" name="garage_wojewodztwo" value={region} />
         <input type="hidden" name="garage_config" value={JSON.stringify(config)} />
         <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
         
-        <button 
-          onClick={handleOrder} 
-          disabled={!region}
-          className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 ${
-            region ? 'bg-orange-600 hover:bg-orange-500 text-white cursor-pointer hover:shadow-orange-500/25' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-          }`}
-        >
+        <button onClick={handleOrder} disabled={!region} className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 ${region ? 'bg-orange-600 hover:bg-orange-500 text-white cursor-pointer hover:shadow-orange-500/25' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}>
           {region ? 'Kupuję i płacę' : 'Wybierz województwo'}
         </button>
       </form>
@@ -152,8 +140,69 @@ function OrderButton({ config, totalPrice }: { config: GarageConfig; totalPrice:
   );
 }
 
+// ── GŁÓWNY PANEL KONFIGURACYJNY ──
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall }: ConfigPanelProps) {
   
+  const [pricingParams, setPricingParams] = useState({ base: 5000, sqm: 0, door: 0, window: 0, wood: 0, gutter: 0 });
+  const [isReadOnly, setIsReadOnly] = useState(false);
+
+  // ODCZYT PARAMETRÓW Z URL (Ceny + Tryb 360)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    
+    // Zapisywanie cennika z WordPressa
+    setPricingParams({
+      base: Number(params.get('base_price')) || 5000,
+      sqm: Number(params.get('sqm_price')) || 0,
+      door: Number(params.get('door_price')) || 0,
+      window: Number(params.get('window_price')) || 0,
+      wood: Number(params.get('wood_pct')) || 0,
+      gutter: Number(params.get('gutter_pct')) || 0,
+    });
+
+    // Tryb wczytywania 360° dla Admina
+    const savedConfigBase64 = params.get('load_config');
+    if (savedConfigBase64) {
+      try {
+        // Dekodujemy Base64 bezpiecznie dla polskich znaków (UTF-8)
+        const jsonStr = decodeURIComponent(escape(window.atob(savedConfigBase64)));
+        const parsedConfig = JSON.parse(jsonStr);
+        setConfig(parsedConfig);
+        setIsReadOnly(true); // Blokuje przycisk zamówienia
+      } catch(e) {
+        console.error("Błąd wczytywania konfiguracji z URL");
+      }
+    }
+  }, [setConfig]);
+
+  // LOGIKA WYLICZANIA CENY
+  const calculatedPrice = useMemo(() => {
+    let total = pricingParams.base;
+    
+    // 1. Dodatek za metry kwadratowe (jeśli ustawiony w panelu)
+    const area = (config.width / 100) * (config.length / 100);
+    total += (area * pricingParams.sqm);
+
+    // 2. Dodatki stałe za sztukę
+    const doorsCount = config.elements.filter(e => e.type === 'door').length;
+    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
+    total += (doorsCount * pricingParams.door);
+    total += (windowsCount * pricingParams.window);
+
+    // 3. Dodatki procentowe (Narzuty)
+    let markupMultiplier = 1;
+    if (config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna') {
+      markupMultiplier += (pricingParams.wood / 100);
+    }
+    if (config.gutters) {
+      markupMultiplier += (pricingParams.gutter / 100);
+    }
+
+    return Math.round(total * markupMultiplier);
+  }, [config, pricingParams]);
+
+
+  // Zabezpieczenie dachu spadowego
   useEffect(() => {
     if (config.roofType === 'slope-front') {
       const maxH = config.height - 30;
@@ -224,7 +273,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const removeElement = (id: string) => setConfig(prev => ({ ...prev, elements: prev.elements.filter(e => e.id !== id) }));
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
-  const currentPrice = 7900; 
 
   return (
     <div className="space-y-4 pb-12">
@@ -489,8 +537,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
-      {/* ── ZAMÓWIENIE ── */}
-      <OrderButton config={config} totalPrice={currentPrice} />
+      {/* ── ZAMÓWIENIE (Przycisk znika w trybie 360° Admina) ── */}
+      <OrderButton config={config} totalPrice={calculatedPrice} isReadOnly={isReadOnly} />
     </div>
   );
 }
