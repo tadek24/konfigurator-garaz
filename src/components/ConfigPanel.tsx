@@ -20,7 +20,6 @@ const WOJEWODZTWA = [
   "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"
 ];
 
-// ── Ikony i Słowniki ──
 function RoofIcon({ type }: { type: RoofType }) {
   const base = "stroke-current fill-none";
   switch (type) {
@@ -61,8 +60,8 @@ function ColorPicker({ colors, value, onChange, labels }: { colors: string[]; va
   );
 }
 
-// ── KOMPONENT KOSZYKA Z WYBOREM WOJEWÓDZTWA ──
-function OrderButton({ config, totalPrice, isReadOnly, targetStoreUrl }: { config: GarageConfig; totalPrice: number; isReadOnly: boolean; targetStoreUrl: string }) {
+// ── KOMPONENT KOSZYKA ──
+function OrderButton({ config, totalPrice, targetStoreUrl }: { config: GarageConfig; totalPrice: number; targetStoreUrl: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState("");
@@ -86,21 +85,12 @@ function OrderButton({ config, totalPrice, isReadOnly, targetStoreUrl }: { confi
           formRef.current.submit();
         }
       } catch (err) {
-        alert("Błąd generowania zdjęcia garażu. Odśwież stronę.");
+        alert("Błąd generowania zdjęcia garażu.");
       }
     } else {
       alert("Chwilowy błąd pobierania widoku 3D.");
     }
   };
-
-  if (isReadOnly) {
-    return (
-      <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white text-center">
-        <h3 className="font-bold text-xl text-orange-500 mb-2">Tryb Podglądu 360°</h3>
-        <p className="text-zinc-400 text-sm">Oglądasz zapisaną konfigurację klienta z panelu WooCommerce. Możesz swobodnie obracać model 3D.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
@@ -113,7 +103,7 @@ function OrderButton({ config, totalPrice, isReadOnly, targetStoreUrl }: { confi
       </div>
 
       <div className="flex justify-between items-end mb-6 pb-4 border-b border-zinc-700">
-        <span className="text-zinc-400 font-medium">Cena całkowita:</span>
+        <span className="text-zinc-400 font-medium">Cena konfiguracji:</span>
         <span className="text-3xl font-extrabold text-orange-500">{totalPrice} zł</span>
       </div>
       
@@ -122,7 +112,6 @@ function OrderButton({ config, totalPrice, isReadOnly, targetStoreUrl }: { confi
         <input type="hidden" name="garage_price" value={totalPrice} />
         <input type="hidden" name="garage_wojewodztwo" value={region} />
         <input type="hidden" name="garage_config" value={JSON.stringify(config)} />
-        <input type="hidden" name="garage_origin" value={targetStoreUrl} />
         <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
         
         <button onClick={handleOrder} disabled={!region} className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 ${region ? 'bg-orange-600 hover:bg-orange-500 text-white cursor-pointer hover:shadow-orange-500/25' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}>
@@ -136,60 +125,51 @@ function OrderButton({ config, totalPrice, isReadOnly, targetStoreUrl }: { confi
 // ── GŁÓWNY PANEL KONFIGURACYJNY ──
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall }: ConfigPanelProps) {
   
+  const [targetStoreUrl, setTargetStoreUrl] = useState("https://konfigurator.skillup-szkolenia.pl/");
   const [pricingParams, setPricingParams] = useState({ 
     base: 5000, 
     sqmType: 'fixed', sqmVal: 0, 
     doorType: 'fixed', doorVal: 0, 
     windowType: 'fixed', windowVal: 0, 
-    woodType: 'pct', woodVal: 0, 
-    gutterType: 'pct', gutterVal: 0 
+    woodType: 'pct', woodVal: 15, 
+    gutterType: 'pct', gutterVal: 5 
   });
-  
-  const [isReadOnly, setIsReadOnly] = useState(false);
-  const [targetStoreUrl, setTargetStoreUrl] = useState("https://konfigurator.skillup-szkolenia.pl/");
 
-  // ODCZYT PARAMETRÓW Z CZYSTEGO URL
+  // POBIERANIE CENNIKA Z REST API (Z WordPressa)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    
-    const storeUrl = params.get('store_url');
-    if (storeUrl) setTargetStoreUrl(decodeURIComponent(storeUrl));
+    // 1. Zmienna środowiskowa to nasz łącznik ze sklepem WP
+    const wpUrl = process.env.NEXT_PUBLIC_WP_URL || "https://konfigurator.skillup-szkolenia.pl";
+    setTargetStoreUrl(wpUrl);
 
-    setPricingParams({
-      base: Number(params.get('base')) || 5000,
-      sqmType: params.get('sq_t') || 'fixed',
-      sqmVal: Number(params.get('sq_v')) || 0,
-      doorType: params.get('dr_t') || 'fixed',
-      doorVal: Number(params.get('dr_v')) || 0,
-      windowType: params.get('wn_t') || 'fixed',
-      windowVal: Number(params.get('wn_v')) || 0,
-      woodType: params.get('wd_t') || 'pct',
-      woodVal: Number(params.get('wd_v')) || 0,
-      gutterType: params.get('gt_t') || 'pct',
-      gutterVal: Number(params.get('gt_v')) || 0,
-    });
+    // 2. Ciche uderzenie do API, żeby pobrać wyklikane ceny z WP Admin!
+    fetch(`${wpUrl}/wp-json/garage/v1/pricing`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.base !== undefined) {
+          setPricingParams({
+            base: Number(data.base),
+            sqmType: data.sqm_t, sqmVal: Number(data.sqm_v),
+            doorType: data.door_t, doorVal: Number(data.door_v),
+            windowType: data.window_t, windowVal: Number(data.window_v),
+            woodType: data.wood_t, woodVal: Number(data.wood_v),
+            gutterType: data.gutter_t, gutterVal: Number(data.gutter_v),
+          });
+        }
+      })
+      .catch(err => console.error("Błąd pobierania cennika API:", err));
+  }, []);
 
-    const savedConfigBase64 = params.get('load_config');
-    if (savedConfigBase64) {
-      try {
-        const jsonStr = decodeURIComponent(escape(window.atob(savedConfigBase64)));
-        setConfig(JSON.parse(jsonStr));
-        setIsReadOnly(true);
-      } catch(e) { console.error("Błąd wczytywania konfiguracji 360", e); }
-    }
-  }, [setConfig]);
-
-  // LOGIKA WYLICZANIA CENY (ELASTYCZNA MATEMATYKA)
+  // LOGIKA WYLICZANIA CENY (Reaguje na każdy klik!)
   const calculatedPrice = useMemo(() => {
     let total = pricingParams.base;
     let percentMultiplier = 1;
     
-    // 1. Dodatek za m2
+    // Metry kwadratowe
     const area = (config.width / 100) * (config.length / 100);
     if (pricingParams.sqmType === 'fixed') total += (area * pricingParams.sqmVal);
     else percentMultiplier += (area * pricingParams.sqmVal / 100);
 
-    // 2. Dodatki za sztukę
+    // Ilość sztuk okien i drzwi
     const doorsCount = config.elements.filter(e => e.type === 'door').length;
     const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
     
@@ -199,12 +179,12 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     if (pricingParams.windowType === 'fixed') total += (windowsCount * pricingParams.windowVal);
     else percentMultiplier += (windowsCount * pricingParams.windowVal / 100);
 
-    // 3. Dodatki materiałowe
-    if (config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna') {
+    // Opcje premium (kolorystyka i rynny)
+    const isWood = config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna';
+    if (isWood) {
       if (pricingParams.woodType === 'fixed') total += pricingParams.woodVal;
       else percentMultiplier += (pricingParams.woodVal / 100);
     }
-
     if (config.gutters) {
       if (pricingParams.gutterType === 'fixed') total += pricingParams.gutterVal;
       else percentMultiplier += (pricingParams.gutterVal / 100);
@@ -213,7 +193,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     return Math.round(total * percentMultiplier);
   }, [config, pricingParams]);
 
-
+  // Bezpiecznik dachu
   useEffect(() => {
     if (config.roofType === 'slope-front') {
       const maxH = config.height - 30;
@@ -231,9 +211,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     }
   }, [config.roofType, config.height, config.elements, setConfig]);
 
-  const updateConfig = <K extends keyof GarageConfig>(key: K, value: GarageConfig[K]) => {
-    setConfig(prev => ({ ...prev, [key]: value }));
-  };
+  const updateConfig = <K extends keyof GarageConfig>(key: K, value: GarageConfig[K]) => setConfig(prev => ({ ...prev, [key]: value }));
 
   const addElement = (type: GarageElement['type'], wall: WallFace = selectedWall) => {
     let width = 100, height = 200;
@@ -242,14 +220,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     if (type === 'skylight') { width = 100; height = 30; }
 
     const wallWidth = wall === 'front' || wall === 'back' ? config.width : config.length;
-    const newElement: GarageElement = {
-      id: uuidv4(), type, wall, x: 0,
-      y: type === 'window' || type === 'pvc-window' ? 120 : (type === 'skylight' ? config.height - 40 : 0),
-      width, height,
-      gateType: type === 'gate' ? 'up-and-over' : undefined,
-      clearanceHeight: type === 'gate' ? 190 : undefined,
-      hingeSide: 'left',
-    };
+    const newElement: GarageElement = { id: uuidv4(), type, wall, x: 0, y: type === 'window' || type === 'pvc-window' ? 120 : (type === 'skylight' ? config.height - 40 : 0), width, height, gateType: type === 'gate' ? 'up-and-over' : undefined, clearanceHeight: type === 'gate' ? 190 : undefined, hingeSide: 'left' };
 
     const validPos = findValidPosition(newElement, config.elements, wallWidth, config.height);
     if (validPos) {
@@ -268,11 +239,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           const updated = { ...el, ...updates };
           const wallWidth = updated.wall === 'front' || updated.wall === 'back' ? prev.width : prev.length;
           const pos = findValidPosition(updated, prev.elements, wallWidth, prev.height);
-          
           if (!pos && (updates.x !== undefined || updates.y !== undefined || updates.width !== undefined || updates.height !== undefined)) return el; 
-          if (pos && (updates.x !== undefined || updates.y !== undefined)) {
-             if (pos.x !== updated.x || pos.y !== updated.y) return el; 
-          }
+          if (pos && (updates.x !== undefined || updates.y !== undefined)) { if (pos.x !== updated.x || pos.y !== updated.y) return el; }
           return updated;
         }
         return el;
@@ -287,7 +255,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   return (
     <div className="space-y-4 pb-12">
-      
       {/* 1. TYP GARAŻU */}
       <Section title="Typ Garażu (Dach)" icon={<Home size={20} />}>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -329,7 +296,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             </div>
           </div>
         </div>
-
         {config.roofType === 'slope-front' && <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">⚠️ Dach spadowy w przód — max. wysokość bramy ograniczona do <strong>{maxGateHeight} cm</strong>.</div>}
 
         {gates.map((gate, i) => (
@@ -342,9 +308,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 <option value="sectional">Segmentowa</option>
               </select>
             </div>
-
             <div className="mb-3"><button onClick={() => updateElement(gate.id, { isOpen: !gate.isOpen })} className={`w-full py-2 rounded-lg text-sm font-bold transition-colors border ${gate.isOpen ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}>{gate.isOpen ? 'Zamknij Bramę' : 'Otwórz Bramę'}</button></div>
-
             {gate.gateType !== 'sectional' && gate.gateType !== 'swing' && (
               <div className="mb-3">
                 <span className="text-xs text-zinc-500 block mb-2">Położenie klamki:</span>
@@ -354,7 +318,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 </div>
               </div>
             )}
-            
             <div className="grid grid-cols-2 gap-4 mb-3">
               <div><label className="text-xs text-zinc-500">Szerokość</label><input type="number" value={gate.width} onChange={(e) => updateElement(gate.id, { width: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
               <div><label className="text-xs text-zinc-500">Wysokość</label><input type="number" value={gate.height} max={maxGateHeight} onChange={(e) => updateElement(gate.id, { height: Math.min(Number(e.target.value), maxGateHeight) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
@@ -379,13 +342,11 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             ))}
           </div>
         </div>
-
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-orange-500"><Plus size={16} /> Drzwi</button>
           <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-orange-500"><Plus size={16} /> Okno Std</button>
           <button onClick={() => addElement('pvc-window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-orange-500"><Plus size={16} /> Okno PCV</button>
         </div>
-
         <div className="space-y-3">
           {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (
             <div className="text-sm text-zinc-400 text-center py-4 bg-white border border-dashed rounded-lg">Brak dodatków na tej ścianie.</div>
@@ -394,7 +355,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <div key={el.id} className="bg-white p-3 rounded-xl border border-zinc-200 shadow-sm relative group">
                 <button onClick={() => removeElement(el.id)} className="absolute top-3 right-3 text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
                 <h3 className="font-semibold text-zinc-800 mb-3 capitalize">{el.type === 'door' ? 'Drzwi' : el.type === 'window' ? 'Okno Std' : 'Okno PCV'} #{idx + 1}</h3>
-                
                 <div className="space-y-3">
                   {el.type === 'door' && (
                     <div className="mb-3">
@@ -426,8 +386,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
       {/* 5. KOLORY */}
       <Section title="Kolory i Przetłoczenia" icon={<PaintBucket size={20} />} defaultOpen={false}>
-        
-        {/* DACH */}
         <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🏠 Dach</h3>
           <div className="space-y-3">
             <div>
@@ -451,8 +409,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           </div>
         </div>
         <hr className="border-zinc-200 my-4" />
-
-        {/* ŚCIANY */}
         <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🧱 Ściany</h3>
           <div className="space-y-3">
             <div>
@@ -485,8 +441,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           </div>
         </div>
         <hr className="border-zinc-200 my-4" />
-
-        {/* BRAMA */}
         <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🚪 Brama Główna</h3>
           <div className="space-y-3">
             <div>
@@ -513,8 +467,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           </div>
         </div>
         <hr className="border-zinc-200 my-4" />
-
-        {/* DRZWI */}
         <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🚪 Drzwi Boczne</h3>
           <div className="space-y-3">
             <div>
@@ -541,15 +493,12 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           </div>
         </div>
         <hr className="border-zinc-200 my-4" />
-
-        {/* OKNA */}
         <div><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🪟 Ramy Okien (RAL)</h3>
           <ColorPicker colors={RAL_COLORS.map(c=>c.color)} value={config.windowColor} onChange={(c) => updateConfig('windowColor', c)} labels={Object.fromEntries(RAL_COLORS.map(c => [c.color, c.label]))} />
         </div>
       </Section>
 
-      {/* ── ZAMÓWIENIE (Znika w trybie 360°) ── */}
-      <OrderButton config={config} totalPrice={calculatedPrice} isReadOnly={isReadOnly} targetStoreUrl={targetStoreUrl} />
+      <OrderButton config={config} totalPrice={calculatedPrice} targetStoreUrl={targetStoreUrl} />
     </div>
   );
 }
