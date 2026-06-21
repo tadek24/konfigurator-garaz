@@ -68,7 +68,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     windowType: 'fixed', windowVal: 0, woodType: 'pct', woodVal: 0, gutterType: 'pct', gutterVal: 0 
   });
   
-  // DYNAMICZNE DODATKI Z API WORDPRESSA
   const [customAddons, setCustomAddons] = useState<any[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   
@@ -76,41 +75,37 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState("");
 
-  // POBIERANIE CENNIKA I DODATKÓW PRZEZ REST API!
+  // ZUPEŁNIE OTWARTY ODCZYT CEN Z WORDPRESSA
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const storeUrl = params.get('store_url');
-      const token = params.get('token');
+      const envWpUrl = process.env.NEXT_PUBLIC_WP_URL || "https://konfigurator.skillup-szkolenia.pl";
+      const storeUrl = params.get('store_url') || envWpUrl;
+      const cleanStoreUrl = decodeURIComponent(storeUrl).replace(/\/$/, "");
+      setTargetStoreUrl(cleanStoreUrl);
 
-      if (storeUrl && token) {
-        const cleanStoreUrl = decodeURIComponent(storeUrl).replace(/\/$/, "");
-        setTargetStoreUrl(cleanStoreUrl);
-
-        // Uderzamy do API z ominięciem cache!
-        fetch(`${cleanStoreUrl}/wp-json/garage/v1/config?token=${token}&t=${new Date().getTime()}`, { cache: 'no-store' })
-          .then(res => res.json())
-          .then(data => {
-            if (data && data.pricing && data.pricing.base !== undefined) {
-              setPricingParams({
-                base: Number(data.pricing.base),
-                sqmType: data.pricing.sqm_t, sqmVal: Number(data.pricing.sqm_v),
-                doorType: data.pricing.door_t, doorVal: Number(data.pricing.door_v),
-                windowType: data.pricing.window_t, windowVal: Number(data.pricing.window_v),
-                woodType: data.pricing.wood_t, woodVal: Number(data.pricing.wood_v),
-                gutterType: data.pricing.gutter_t, gutterVal: Number(data.pricing.gutter_v),
-              });
-            }
-            if (data && data.addons) {
-              setCustomAddons(data.addons);
-            }
-          })
-          .catch(err => console.error("Błąd pobierania cennika API:", err));
-      }
+      // Uderzamy do całkowicie otwartego API. Bez haseł, bez tokenów!
+      fetch(`${cleanStoreUrl}/wp-json/garage/v1/config?t=${new Date().getTime()}`, { cache: 'no-store' })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.pricing && data.pricing.base !== undefined) {
+            setPricingParams({
+              base: Number(data.pricing.base),
+              sqmType: data.pricing.sqm_t, sqmVal: Number(data.pricing.sqm_v),
+              doorType: data.pricing.door_t, doorVal: Number(data.pricing.door_v),
+              windowType: data.pricing.window_t, windowVal: Number(data.pricing.window_v),
+              woodType: data.pricing.wood_t, woodVal: Number(data.pricing.wood_v),
+              gutterType: data.pricing.gutter_t, gutterVal: Number(data.pricing.gutter_v),
+            });
+          }
+          if (data && data.addons) {
+            setCustomAddons(data.addons);
+          }
+        })
+        .catch(err => console.error("Błąd pobierania cennika API:", err));
     }
   }, []);
 
-  // WYLICZANIE OSTATECZNEJ CENY
   const calculatedPrice = useMemo(() => {
     let total = pricingParams.base;
     let percentMultiplier = 1;
@@ -178,9 +173,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     setSelectedAddons(prev => prev.includes(addonId) ? prev.filter(id => id !== addonId) : [...prev, addonId]);
   };
 
-  // Łańcuch dla zapisanych dodatków do WP
   const selectedAddonsText = selectedAddons.map(id => customAddons.find(a => a.id === id)?.label).filter(Boolean).join(", ");
-
 
   useEffect(() => {
     if (config.roofType === 'slope-front') {
@@ -318,8 +311,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         ))}
       </Section>
 
-      {/* 4. DODATKI */}
-      <Section title="Dodatki Konstrukcyjne" icon={<Layers size={20} />}>
+      {/* 4. DODATKI KONSTRUKCYJNE (DRZWI/OKNA) */}
+      <Section title="Drzwi i Okna" icon={<Layers size={20} />}>
         <div className="mb-4">
           <label className="text-sm font-medium text-zinc-700 block mb-2">Edytuj ścianę:</label>
           <div className="flex gap-2">
@@ -337,7 +330,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
         <div className="space-y-3">
           {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (
-            <div className="text-sm text-zinc-400 text-center py-4 bg-white border border-dashed rounded-lg">Brak dodatków na tej ścianie.</div>
+            <div className="text-sm text-zinc-400 text-center py-4 bg-white border border-dashed rounded-lg">Brak elementów na tej ścianie.</div>
           ) : (
             config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').map((el, idx) => (
               <div key={el.id} className="bg-white p-3 rounded-xl border border-zinc-200 shadow-sm relative group">
@@ -486,7 +479,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
-      {/* 6. NOWOŚĆ: DYNAMICZNE DODATKI Z WORDPRESSA */}
+      {/* 6. DYNAMICZNE DODATKI Z WORDPRESSA */}
       {customAddons.length > 0 && (
         <Section title="Opcje Dodatkowe" icon={<Plus size={20} />}>
           <div className="space-y-3">
