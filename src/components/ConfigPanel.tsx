@@ -60,99 +60,11 @@ function ColorPicker({ colors, value, onChange, labels }: { colors: string[]; va
   );
 }
 
-export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall }: ConfigPanelProps) {
-  
-  const [targetStoreUrl, setTargetStoreUrl] = useState("https://konfigurator.skillup-szkolenia.pl/");
-  const [pricingParams, setPricingParams] = useState({ 
-    base: 5000, sqmType: 'fixed', sqmVal: 0, doorType: 'fixed', doorVal: 0, 
-    windowType: 'fixed', windowVal: 0, woodType: 'pct', woodVal: 0, gutterType: 'pct', gutterVal: 0 
-  });
-  
-  const [customAddons, setCustomAddons] = useState<any[]>([]);
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
-  
+// ── KOMPONENT KOSZYKA ──
+function OrderButton({ config, totalPrice, targetStoreUrl, selectedAddonsText }: { config: GarageConfig; totalPrice: number; targetStoreUrl: string; selectedAddonsText: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState("");
-
-  // POBIERANIE CENNIKA Z OMINIĘCIEM BŁĘDU 404
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const envWpUrl = process.env.NEXT_PUBLIC_WP_URL || "https://konfigurator.skillup-szkolenia.pl";
-      
-      // store_url służy do wysyłania formularza KUP TERAZ
-      const storeUrl = params.get('store_url') ? decodeURIComponent(params.get('store_url') as string) : envWpUrl;
-      setTargetStoreUrl(storeUrl);
-
-      // api_url to czysty, główny adres WordPressa do pobierania cennika!
-      const apiUrl = params.get('api_url') ? decodeURIComponent(params.get('api_url') as string) : envWpUrl;
-      const cleanApiUrl = apiUrl.replace(/\/$/, "");
-
-      fetch(`${cleanApiUrl}/wp-json/garage/v1/config?t=${new Date().getTime()}`, { cache: 'no-store' })
-        .then(res => {
-          if (!res.ok) throw new Error("Błąd API: " + res.status);
-          return res.json();
-        })
-        .then(data => {
-          if (data && data.pricing && data.pricing.base !== undefined) {
-            setPricingParams({
-              base: Number(data.pricing.base),
-              sqmType: data.pricing.sqm_t, sqmVal: Number(data.pricing.sqm_v),
-              doorType: data.pricing.door_t, doorVal: Number(data.pricing.door_v),
-              windowType: data.pricing.window_t, windowVal: Number(data.pricing.window_v),
-              woodType: data.pricing.wood_t, woodVal: Number(data.pricing.wood_v),
-              gutterType: data.pricing.gutter_t, gutterVal: Number(data.pricing.gutter_v),
-            });
-          }
-          if (data && data.addons) {
-            setCustomAddons(data.addons);
-          }
-        })
-        .catch(err => console.error("Błąd pobierania cennika API:", err));
-    }
-  }, []);
-
-  const calculatedPrice = useMemo(() => {
-    let total = pricingParams.base;
-    let percentMultiplier = 1;
-    
-    const area = (config.width / 100) * (config.length / 100);
-    if (pricingParams.sqmType === 'fixed') total += (area * pricingParams.sqmVal);
-    else percentMultiplier += (area * pricingParams.sqmVal / 100);
-
-    const doorsCount = config.elements.filter(e => e.type === 'door').length;
-    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
-    
-    if (pricingParams.doorType === 'fixed') total += (doorsCount * pricingParams.doorVal);
-    else percentMultiplier += (doorsCount * pricingParams.doorVal / 100);
-
-    if (pricingParams.windowType === 'fixed') total += (windowsCount * pricingParams.windowVal);
-    else percentMultiplier += (windowsCount * pricingParams.windowVal / 100);
-
-    const isWood = config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna';
-    if (isWood) {
-      if (pricingParams.woodType === 'fixed') total += pricingParams.woodVal;
-      else percentMultiplier += (pricingParams.woodVal / 100);
-    }
-
-    if (config.gutters) {
-      if (pricingParams.gutterType === 'fixed') total += pricingParams.gutterVal;
-      else percentMultiplier += (pricingParams.gutterVal / 100);
-    }
-
-    let customAddonTotal = 0;
-    selectedAddons.forEach(addonId => {
-      const addon = customAddons.find(a => a.id === addonId);
-      if (addon) {
-        if (addon.type === 'fixed') customAddonTotal += Number(addon.price);
-        if (addon.type === 'pct') percentMultiplier += (Number(addon.price) / 100);
-      }
-    });
-
-    return Math.round((total * percentMultiplier) + customAddonTotal);
-  }, [config, pricingParams, selectedAddons, customAddons]);
-
 
   const handleOrder = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -171,9 +83,132 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           inputImgRef.current.value = tempCanvas.toDataURL('image/jpeg', 0.7); 
           formRef.current.submit();
         }
-      } catch (err) { alert("Błąd zdjęcia"); }
+      } catch (err) { alert("Błąd zapisu widoku."); }
     } else { alert("Błąd 3D."); }
   };
+
+  return (
+    <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
+      <div className="flex flex-col gap-2 mb-4">
+        <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
+        <select value={region} onChange={(e) => setRegion(e.target.value)} className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2 focus:ring-orange-500" required >
+          <option value="" disabled>Wybierz z listy...</option>
+          {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
+        </select>
+      </div>
+
+      <div className="flex justify-between items-end mb-6 pb-4 border-b border-zinc-700">
+        <span className="text-zinc-400 font-medium">Cena całkowita:</span>
+        <span className="text-3xl font-extrabold text-orange-500">{totalPrice} zł</span>
+      </div>
+      
+      <form ref={formRef} method="POST" action={targetStoreUrl} target="_parent">
+        <input type="hidden" name="custom_garage_checkout" value="1" />
+        <input type="hidden" name="garage_price" value={totalPrice} />
+        <input type="hidden" name="garage_wojewodztwo" value={region} />
+        <input type="hidden" name="garage_config" value={JSON.stringify(config)} />
+        <input type="hidden" name="garage_dynamic_addons" value={selectedAddonsText} />
+        <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
+        
+        <button onClick={handleOrder} disabled={!region} className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 ${region ? 'bg-orange-600 hover:bg-orange-500 text-white cursor-pointer hover:shadow-orange-500/25' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}>
+          {region ? 'Kupuję i płacę' : 'Wybierz województwo'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall }: ConfigPanelProps) {
+  
+  const [targetStoreUrl, setTargetStoreUrl] = useState("https://konfigurator.skillup-szkolenia.pl/");
+  
+  // Realistyczne wartości startowe (gwarantują, że suwaki działają od razu, nawet przy braku linku!)
+  const [pricingParams, setPricingParams] = useState({ 
+    base: 5000, 
+    sqmType: 'fixed', sqmVal: 150, 
+    doorType: 'fixed', doorVal: 350, 
+    windowType: 'fixed', windowVal: 250, 
+    woodType: 'pct', woodVal: 15, 
+    gutterType: 'pct', gutterVal: 5 
+  });
+  
+  const [customAddons, setCustomAddons] = useState<any[]>([]);
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+
+  // BŁYSKAWICZNE CZYTANIE PARAMETRÓW Z URL (W 100% ODPORNE NA ZAPORY)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      
+      const storeUrl = params.get('store_url');
+      if (storeUrl) setTargetStoreUrl(decodeURIComponent(storeUrl));
+
+      if (params.has('base')) {
+        setPricingParams({
+          base: Number(params.get('base')),
+          sqmType: params.get('sq_t') || 'fixed', sqmVal: Number(params.get('sq_v')) || 0,
+          doorType: params.get('dr_t') || 'fixed', doorVal: Number(params.get('dr_v')) || 0,
+          windowType: params.get('wn_t') || 'fixed', windowVal: Number(params.get('wn_v')) || 0,
+          woodType: params.get('wd_t') || 'pct', woodVal: Number(params.get('wd_v')) || 0,
+          gutterType: params.get('gt_t') || 'pct', gutterVal: Number(params.get('gt_v')) || 0,
+        });
+      }
+
+      // Bezpieczne wczytanie dynamicznych opcji dla klienta
+      const addonsRaw = params.get('addns');
+      if (addonsRaw) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(addonsRaw));
+          setCustomAddons(parsed);
+        } catch (e) { console.error(e); }
+      }
+    }
+  }, []);
+
+  // SILNIK MATEMATYCZNY (Reaguje na ruch suwaków)
+  const calculatedPrice = useMemo(() => {
+    let total = pricingParams.base;
+    let percentMultiplier = 1;
+    
+    // Suwaki wymiarów obliczają metry kwadratowe rzutu
+    const area = (config.width / 100) * (config.length / 100);
+    if (pricingParams.sqmType === 'fixed') total += (area * pricingParams.sqmVal);
+    else percentMultiplier += (area * pricingParams.sqmVal / 100);
+
+    // Drzwi i okna
+    const doorsCount = config.elements.filter(e => e.type === 'door').length;
+    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
+    
+    if (pricingParams.doorType === 'fixed') total += (doorsCount * pricingParams.doorVal);
+    else percentMultiplier += (doorsCount * pricingParams.doorVal / 100);
+
+    if (pricingParams.windowType === 'fixed') total += (windowsCount * pricingParams.windowVal);
+    else percentMultiplier += (windowsCount * pricingParams.windowVal / 100);
+
+    // Narzuty poszycia
+    const isWood = config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna';
+    if (isWood) {
+      if (pricingParams.woodType === 'fixed') total += pricingParams.woodVal;
+      else percentMultiplier += (pricingParams.woodVal / 100);
+    }
+
+    if (config.gutters) {
+      if (pricingParams.gutterType === 'fixed') total += pricingParams.gutterVal;
+      else percentMultiplier += (pricingParams.gutterVal / 100);
+    }
+
+    // Narzuty opcji stworzonych przez Admina w WP
+    let customAddonTotal = 0;
+    selectedAddons.forEach(addonId => {
+      const addon = customAddons.find(a => a.id === addonId);
+      if (addon) {
+        if (addon.type === 'fixed') customAddonTotal += Number(addon.price);
+        if (addon.type === 'pct') percentMultiplier += (Number(addon.price) / 100);
+      }
+    });
+
+    return Math.round((total * percentMultiplier) + customAddonTotal);
+  }, [config, pricingParams, selectedAddons, customAddons]);
 
   const handleAddonToggle = (addonId: string) => {
     setSelectedAddons(prev => prev.includes(addonId) ? prev.filter(id => id !== addonId) : [...prev, addonId]);
@@ -214,9 +249,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       newElement.x = validPos.x; newElement.y = validPos.y;
       setConfig(prev => ({ ...prev, elements: [...prev.elements, newElement] }));
       setSelectedWall(wall);
-    } else {
-      alert("Brak miejsca na tej ścianie na nowy element!");
-    }
+    } else { alert("Brak miejsca na tej ścianie!"); }
   };
 
   const updateElement = (id: string, updates: Partial<GarageElement>) => {
@@ -383,7 +416,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                       const updates: Partial<GarageConfig> = { roofProfile: p.value };
                       if (p.value === 'blachodachowka' && !TILE_COLORS.map(c => c.color).includes(config.roofColor)) updates.roofColor = '#3b3b3c';
                       setConfig(prev => ({ ...prev, ...updates }));
-                    }} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.roofProfile === p.value ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
+                    }} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.roofProfile === p.value ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
                     {p.label}
                   </button>
                 ))}
@@ -509,36 +542,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </Section>
       )}
 
-      {/* DOLNY KOSZYK ZAMÓWIENIA */}
-      <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
-        <div className="flex flex-col gap-2 mb-4">
-          <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
-          <select value={region} onChange={(e) => setRegion(e.target.value)} className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2 focus:ring-orange-500" required >
-            <option value="" disabled>Wybierz z listy...</option>
-            {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
-          </select>
-        </div>
-
-        <div className="flex justify-between items-end mb-6 pb-4 border-b border-zinc-700">
-          <span className="text-zinc-400 font-medium">Cena całkowita:</span>
-          <span className="text-3xl font-extrabold text-orange-500">{calculatedPrice} zł</span>
-        </div>
-        
-        <form ref={formRef} method="POST" action={targetStoreUrl} target="_parent">
-          <input type="hidden" name="custom_garage_checkout" value="1" />
-          <input type="hidden" name="garage_price" value={calculatedPrice} />
-          <input type="hidden" name="garage_wojewodztwo" value={region} />
-          <input type="hidden" name="garage_config" value={JSON.stringify(config)} />
-          <input type="hidden" name="garage_origin" value={targetStoreUrl} />
-          <input type="hidden" name="garage_dynamic_addons" value={selectedAddonsText} />
-          <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
-          
-          <button onClick={handleOrder} disabled={!region} className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 ${region ? 'bg-orange-600 hover:bg-orange-500 text-white cursor-pointer hover:shadow-orange-500/25' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}>
-            {region ? 'Kupuję i płacę' : 'Wybierz województwo'}
-          </button>
-        </form>
-      </div>
-
+      {/* JEDYNY, FINALNY PRZYCISK KOSZYKA */}
+      <OrderButton config={config} totalPrice={calculatedPrice} targetStoreUrl={targetStoreUrl} selectedAddonsText={selectedAddonsText} />
     </div>
   );
 }
