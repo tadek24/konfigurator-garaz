@@ -20,7 +20,7 @@ const WOJEWODZTWA = [
   "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"
 ];
 
-// ── Ikony i Słowniki (Bez zmian) ──
+// ── Ikony i Słowniki ──
 function RoofIcon({ type }: { type: RoofType }) {
   const base = "stroke-current fill-none";
   switch (type) {
@@ -61,18 +61,11 @@ function ColorPicker({ colors, value, onChange, labels }: { colors: string[]; va
   );
 }
 
-// ── KOMPONENT KOSZYKA Z WYBOREM WOJEWÓDZTWA ──
-function OrderButton({ config, totalPrice, isReadOnly }: { config: GarageConfig; totalPrice: number; isReadOnly: boolean }) {
+// ── KOMPONENT KOSZYKA ──
+function OrderButton({ config, totalPrice, isReadOnly, targetStoreUrl }: { config: GarageConfig; totalPrice: number; isReadOnly: boolean; targetStoreUrl: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState("");
-  const [targetStoreUrl, setTargetStoreUrl] = useState("");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const storeUrl = params.get('store_url');
-    setTargetStoreUrl(storeUrl || process.env.NEXT_PUBLIC_WP_URL || "https://konfigurator.skillup-szkolenia.pl/");
-  }, []);
 
   const handleOrder = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -100,12 +93,11 @@ function OrderButton({ config, totalPrice, isReadOnly }: { config: GarageConfig;
     }
   };
 
-  // Jeśli to tryb wglądu dla Admina (360 view), chowamy przycisk kupna
   if (isReadOnly) {
     return (
       <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white text-center">
         <h3 className="font-bold text-xl text-orange-500 mb-2">Tryb Podglądu 360°</h3>
-        <p className="text-zinc-400 text-sm">Oglądasz zapisaną konfigurację klienta z panelu WooCommerce. Możesz obracać model 3D.</p>
+        <p className="text-zinc-400 text-sm">Oglądasz zapisaną konfigurację klienta z panelu WooCommerce. Możesz swobodnie obracać model 3D.</p>
       </div>
     );
   }
@@ -143,66 +135,93 @@ function OrderButton({ config, totalPrice, isReadOnly }: { config: GarageConfig;
 // ── GŁÓWNY PANEL KONFIGURACYJNY ──
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall }: ConfigPanelProps) {
   
-  const [pricingParams, setPricingParams] = useState({ base: 5000, sqm: 0, door: 0, window: 0, wood: 0, gutter: 0 });
+  const [pricingParams, setPricingParams] = useState({ 
+    base: 5000, sqm: 0, door: 0, window: 0, 
+    woodType: 'pct', woodVal: 0, 
+    gutterType: 'pct', gutterVal: 0 
+  });
+  
   const [isReadOnly, setIsReadOnly] = useState(false);
+  const [targetStoreUrl, setTargetStoreUrl] = useState("https://konfigurator.skillup-szkolenia.pl/");
 
-  // ODCZYT PARAMETRÓW Z URL (Ceny + Tryb 360)
+  // ODCZYT PARAMETRÓW Z URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     
-    // Zapisywanie cennika z WordPressa
-    setPricingParams({
-      base: Number(params.get('base_price')) || 5000,
-      sqm: Number(params.get('sqm_price')) || 0,
-      door: Number(params.get('door_price')) || 0,
-      window: Number(params.get('window_price')) || 0,
-      wood: Number(params.get('wood_pct')) || 0,
-      gutter: Number(params.get('gutter_pct')) || 0,
-    });
+    const storeUrl = params.get('store_url');
+    if (storeUrl) setTargetStoreUrl(decodeURIComponent(storeUrl));
 
-    // Tryb wczytywania 360° dla Admina
+    // Zapisywanie zdekodowanego cennika z WordPressa
+    const pricingBase64 = params.get('pricing');
+    if (pricingBase64) {
+      try {
+        const pricingJson = window.atob(pricingBase64);
+        const p = JSON.parse(pricingJson);
+        setPricingParams({
+          base: Number(p.base) || 5000,
+          sqm: Number(p.sqm) || 0,
+          door: Number(p.door) || 0,
+          window: Number(p.window) || 0,
+          woodType: p.woodType || 'pct',
+          woodVal: Number(p.woodVal) || 0,
+          gutterType: p.gutterType || 'pct',
+          gutterVal: Number(p.gutterVal) || 0,
+        });
+      } catch (e) { console.error("Błąd dekodowania cennika", e); }
+    }
+
+    // Tryb wczytywania 360°
     const savedConfigBase64 = params.get('load_config');
     if (savedConfigBase64) {
       try {
-        // Dekodujemy Base64 bezpiecznie dla polskich znaków (UTF-8)
         const jsonStr = decodeURIComponent(escape(window.atob(savedConfigBase64)));
-        const parsedConfig = JSON.parse(jsonStr);
-        setConfig(parsedConfig);
-        setIsReadOnly(true); // Blokuje przycisk zamówienia
-      } catch(e) {
-        console.error("Błąd wczytywania konfiguracji z URL");
-      }
+        setConfig(JSON.parse(jsonStr));
+        setIsReadOnly(true); // Blokuje przycisk kupna w podglądzie
+      } catch(e) { console.error("Błąd wczytywania konfiguracji", e); }
     }
   }, [setConfig]);
 
-  // LOGIKA WYLICZANIA CENY
+  // LOGIKA WYLICZANIA CENY (ELASTYCZNA)
   const calculatedPrice = useMemo(() => {
     let total = pricingParams.base;
     
-    // 1. Dodatek za metry kwadratowe (jeśli ustawiony w panelu)
+    // 1. Dodatek za m2
     const area = (config.width / 100) * (config.length / 100);
     total += (area * pricingParams.sqm);
 
-    // 2. Dodatki stałe za sztukę
+    // 2. Dodatki za sztukę
     const doorsCount = config.elements.filter(e => e.type === 'door').length;
     const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
     total += (doorsCount * pricingParams.door);
     total += (windowsCount * pricingParams.window);
 
-    // 3. Dodatki procentowe (Narzuty)
-    let markupMultiplier = 1;
-    if (config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna') {
-      markupMultiplier += (pricingParams.wood / 100);
-    }
-    if (config.gutters) {
-      markupMultiplier += (pricingParams.gutter / 100);
+    // 3. Dodatki stałe vs procentowe
+    let percentMultiplier = 1;
+    
+    // Opcja - Drewnopodobne
+    if (config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna') {
+      if (pricingParams.woodType === 'fixed') {
+        total += pricingParams.woodVal;
+      } else {
+        percentMultiplier += (pricingParams.woodVal / 100);
+      }
     }
 
-    return Math.round(total * markupMultiplier);
+    // Opcja - Orynnowanie
+    if (config.gutters) {
+      if (pricingParams.gutterType === 'fixed') {
+        total += pricingParams.gutterVal;
+      } else {
+        percentMultiplier += (pricingParams.gutterVal / 100);
+      }
+    }
+
+    // Aplikacja podatku procentowego na sam koniec
+    return Math.round(total * percentMultiplier);
   }, [config, pricingParams]);
 
 
-  // Zabezpieczenie dachu spadowego
+  // Zabezpieczenie dachu spadowego w przód
   useEffect(() => {
     if (config.roofType === 'slope-front') {
       const maxH = config.height - 30;
@@ -537,8 +556,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
-      {/* ── ZAMÓWIENIE (Przycisk znika w trybie 360° Admina) ── */}
-      <OrderButton config={config} totalPrice={calculatedPrice} isReadOnly={isReadOnly} />
+      {/* ── ZAMÓWIENIE (Przycisk znika w trybie 360°) ── */}
+      <OrderButton config={config} totalPrice={calculatedPrice} isReadOnly={isReadOnly} targetStoreUrl={targetStoreUrl} />
     </div>
   );
 }
