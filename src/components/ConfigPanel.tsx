@@ -11,14 +11,10 @@ interface ConfigPanelProps {
   setConfig: React.Dispatch<React.SetStateAction<GarageConfig>>;
   selectedWall: WallFace;
   setSelectedWall: (wall: WallFace) => void;
+  appData: any; // Dane wstrzyknięte bezpośrednio z WordPressa!
 }
 
-const WOJEWODZTWA = [
-  "Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubuskie",
-  "Łódzkie", "Małopolskie", "Mazowieckie", "Opolskie",
-  "Podkarpackie", "Podlaskie", "Pomorskie", "Śląskie",
-  "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"
-];
+const WOJEWODZTWA = ["Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubuskie", "Łódzkie", "Małopolskie", "Mazowieckie", "Opolskie", "Podkarpackie", "Podlaskie", "Pomorskie", "Śląskie", "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"];
 
 function RoofIcon({ type }: { type: RoofType }) {
   const base = "stroke-current fill-none";
@@ -42,7 +38,7 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   return (
     <section className="bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-5 text-left">
-        <h2 className="flex items-center gap-2 font-bold text-lg text-zinc-900"><span className="text-orange-600">{icon}</span>{title}</h2>
+        <h2 className="flex items-center gap-2 font-bold text-lg text-zinc-900"><span className="text-[var(--theme)]">{icon}</span>{title}</h2>
         <ChevronDown size={20} className={`text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && <div className="px-5 pb-5 border-t border-zinc-200 pt-4">{children}</div>}
@@ -60,16 +56,68 @@ function ColorPicker({ colors, value, onChange, labels }: { colors: string[]; va
   );
 }
 
-// ── KOMPONENT KOSZYKA ──
-function OrderButton({ config, totalPrice, targetStoreUrl, selectedAddonsText }: { config: GarageConfig; totalPrice: number; targetStoreUrl: string; selectedAddonsText: string }) {
+export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData }: ConfigPanelProps) {
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState("");
 
+  const pricing = appData.pricing;
+  const customAddons = appData.addons || [];
+
+  // MOCNY SILNIK MATEMATYCZNY (Różnica od bazy + Akcesoria)
+  const calculatedPrice = useMemo(() => {
+    let total = appData.baseConfig.p; // Cena bazowa
+    let percentMultiplier = 1;
+    
+    // 1. Obliczanie DOPŁATY za metry (tylko to co ponad bazę)
+    const baseArea = (appData.baseConfig.w / 100) * (appData.baseConfig.l / 100);
+    const currentArea = (config.width / 100) * (config.length / 100);
+    const extraArea = Math.max(0, currentArea - baseArea); // Klient nie dostanie zniżki jeśli zmniejszy
+    
+    if (extraArea > 0) {
+      if (pricing.sqm_t === 'fixed') total += (extraArea * pricing.sqm_v);
+      else percentMultiplier += (extraArea * pricing.sqm_v / 100);
+    }
+
+    // 2. Akcesoria sztukowe
+    const doorsCount = config.elements.filter(e => e.type === 'door').length;
+    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
+    
+    if (pricing.door_t === 'fixed') total += (doorsCount * pricing.door_v);
+    else percentMultiplier += (doorsCount * pricing.door_v / 100);
+
+    if (pricing.window_t === 'fixed') total += (windowsCount * pricing.window_v);
+    else percentMultiplier += (windowsCount * pricing.window_v / 100);
+
+    // 3. Materiały / Kolory
+    const isWood = config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna';
+    if (isWood) {
+      if (pricing.wood_t === 'fixed') total += pricing.wood_v;
+      else percentMultiplier += (pricing.wood_v / 100);
+    }
+    if (config.gutters) {
+      if (pricing.gutter_t === 'fixed') total += pricing.gutter_v;
+      else percentMultiplier += (pricing.gutter_v / 100);
+    }
+
+    // 4. Custom Dodatki z WordPressa
+    let customAddonTotal = 0;
+    selectedAddons.forEach(addonId => {
+      const addon = customAddons.find((a: any) => a.id === addonId);
+      if (addon) {
+        if (addon.type === 'fixed') customAddonTotal += Number(addon.price);
+        if (addon.type === 'pct') percentMultiplier += (Number(addon.price) / 100);
+      }
+    });
+
+    return Math.round((total * percentMultiplier) + customAddonTotal);
+  }, [config, pricing, selectedAddons, customAddons, appData]);
+
+
   const handleOrder = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!region) return;
-
     const canvas = document.querySelector('canvas');
     if (canvas && inputImgRef.current && formRef.current) {
       try {
@@ -83,155 +131,12 @@ function OrderButton({ config, totalPrice, targetStoreUrl, selectedAddonsText }:
           inputImgRef.current.value = tempCanvas.toDataURL('image/jpeg', 0.7); 
           formRef.current.submit();
         }
-      } catch (err) { alert("Błąd zapisu widoku."); }
+      } catch (err) { alert("Błąd zdjęcia"); }
     } else { alert("Błąd 3D."); }
   };
 
-  return (
-    <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
-      <div className="flex flex-col gap-2 mb-4">
-        <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
-        <select value={region} onChange={(e) => setRegion(e.target.value)} className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2 focus:ring-orange-500" required >
-          <option value="" disabled>Wybierz z listy...</option>
-          {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
-        </select>
-      </div>
-
-      <div className="flex justify-between items-end mb-6 pb-4 border-b border-zinc-700">
-        <span className="text-zinc-400 font-medium">Cena całkowita:</span>
-        <span className="text-3xl font-extrabold text-orange-500">{totalPrice} zł</span>
-      </div>
-      
-      <form ref={formRef} method="POST" action={targetStoreUrl} target="_parent">
-        <input type="hidden" name="custom_garage_checkout" value="1" />
-        <input type="hidden" name="garage_price" value={totalPrice} />
-        <input type="hidden" name="garage_wojewodztwo" value={region} />
-        <input type="hidden" name="garage_config" value={JSON.stringify(config)} />
-        <input type="hidden" name="garage_dynamic_addons" value={selectedAddonsText} />
-        <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
-        
-        <button onClick={handleOrder} disabled={!region} className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 ${region ? 'bg-orange-600 hover:bg-orange-500 text-white cursor-pointer hover:shadow-orange-500/25' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}>
-          {region ? 'Kupuję i płacę' : 'Wybierz województwo'}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall }: ConfigPanelProps) {
-  
-  const [targetStoreUrl, setTargetStoreUrl] = useState("https://konfigurator.skillup-szkolenia.pl/");
-  
-  // Realistyczne wartości startowe (gwarantują, że suwaki działają od razu, nawet przy braku linku!)
-  const [pricingParams, setPricingParams] = useState({ 
-    base: 5000, 
-    sqmType: 'fixed', sqmVal: 150, 
-    doorType: 'fixed', doorVal: 350, 
-    windowType: 'fixed', windowVal: 250, 
-    woodType: 'pct', woodVal: 15, 
-    gutterType: 'pct', gutterVal: 5 
-  });
-  
-  const [customAddons, setCustomAddons] = useState<any[]>([]);
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
-
-  // BŁYSKAWICZNE CZYTANIE PARAMETRÓW Z URL (W 100% ODPORNE NA ZAPORY)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      
-      const storeUrl = params.get('store_url');
-      if (storeUrl) setTargetStoreUrl(decodeURIComponent(storeUrl));
-
-      if (params.has('base')) {
-        setPricingParams({
-          base: Number(params.get('base')),
-          sqmType: params.get('sq_t') || 'fixed', sqmVal: Number(params.get('sq_v')) || 0,
-          doorType: params.get('dr_t') || 'fixed', doorVal: Number(params.get('dr_v')) || 0,
-          windowType: params.get('wn_t') || 'fixed', windowVal: Number(params.get('wn_v')) || 0,
-          woodType: params.get('wd_t') || 'pct', woodVal: Number(params.get('wd_v')) || 0,
-          gutterType: params.get('gt_t') || 'pct', gutterVal: Number(params.get('gt_v')) || 0,
-        });
-      }
-
-      // Bezpieczne wczytanie dynamicznych opcji dla klienta
-      const addonsRaw = params.get('addns');
-      if (addonsRaw) {
-        try {
-          const parsed = JSON.parse(decodeURIComponent(addonsRaw));
-          setCustomAddons(parsed);
-        } catch (e) { console.error(e); }
-      }
-    }
-  }, []);
-
-  // SILNIK MATEMATYCZNY (Reaguje na ruch suwaków)
-  const calculatedPrice = useMemo(() => {
-    let total = pricingParams.base;
-    let percentMultiplier = 1;
-    
-    // Suwaki wymiarów obliczają metry kwadratowe rzutu
-    const area = (config.width / 100) * (config.length / 100);
-    if (pricingParams.sqmType === 'fixed') total += (area * pricingParams.sqmVal);
-    else percentMultiplier += (area * pricingParams.sqmVal / 100);
-
-    // Drzwi i okna
-    const doorsCount = config.elements.filter(e => e.type === 'door').length;
-    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
-    
-    if (pricingParams.doorType === 'fixed') total += (doorsCount * pricingParams.doorVal);
-    else percentMultiplier += (doorsCount * pricingParams.doorVal / 100);
-
-    if (pricingParams.windowType === 'fixed') total += (windowsCount * pricingParams.windowVal);
-    else percentMultiplier += (windowsCount * pricingParams.windowVal / 100);
-
-    // Narzuty poszycia
-    const isWood = config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna';
-    if (isWood) {
-      if (pricingParams.woodType === 'fixed') total += pricingParams.woodVal;
-      else percentMultiplier += (pricingParams.woodVal / 100);
-    }
-
-    if (config.gutters) {
-      if (pricingParams.gutterType === 'fixed') total += pricingParams.gutterVal;
-      else percentMultiplier += (pricingParams.gutterVal / 100);
-    }
-
-    // Narzuty opcji stworzonych przez Admina w WP
-    let customAddonTotal = 0;
-    selectedAddons.forEach(addonId => {
-      const addon = customAddons.find(a => a.id === addonId);
-      if (addon) {
-        if (addon.type === 'fixed') customAddonTotal += Number(addon.price);
-        if (addon.type === 'pct') percentMultiplier += (Number(addon.price) / 100);
-      }
-    });
-
-    return Math.round((total * percentMultiplier) + customAddonTotal);
-  }, [config, pricingParams, selectedAddons, customAddons]);
-
-  const handleAddonToggle = (addonId: string) => {
-    setSelectedAddons(prev => prev.includes(addonId) ? prev.filter(id => id !== addonId) : [...prev, addonId]);
-  };
-
-  const selectedAddonsText = selectedAddons.map(id => customAddons.find(a => a.id === id)?.label).filter(Boolean).join(", ");
-
-  useEffect(() => {
-    if (config.roofType === 'slope-front') {
-      const maxH = config.height - 30;
-      let changed = false;
-      const newElements = config.elements.map(el => {
-        if (el.wall === 'front' && el.type === 'gate') {
-          const updated = { ...el };
-          if (updated.height > maxH) { updated.height = maxH; changed = true; }
-          if (updated.clearanceHeight && updated.clearanceHeight > maxH) { updated.clearanceHeight = maxH; changed = true; }
-          return updated;
-        }
-        return el;
-      });
-      if (changed) setConfig(prev => ({ ...prev, elements: newElements }));
-    }
-  }, [config.roofType, config.height, config.elements, setConfig]);
+  const handleAddonToggle = (addonId: string) => setSelectedAddons(prev => prev.includes(addonId) ? prev.filter(id => id !== addonId) : [...prev, addonId]);
+  const selectedAddonsText = selectedAddons.map(id => customAddons.find((a:any) => a.id === id)?.label).filter(Boolean).join(", ");
 
   const updateConfig = <K extends keyof GarageConfig>(key: K, value: GarageConfig[K]) => setConfig(prev => ({ ...prev, [key]: value }));
 
@@ -249,7 +154,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       newElement.x = validPos.x; newElement.y = validPos.y;
       setConfig(prev => ({ ...prev, elements: [...prev.elements, newElement] }));
       setSelectedWall(wall);
-    } else { alert("Brak miejsca na tej ścianie!"); }
+    } else { alert("Brak miejsca na tej ścianie na nowy element!"); }
   };
 
   const updateElement = (id: string, updates: Partial<GarageElement>) => {
@@ -279,7 +184,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       <Section title="Typ Garażu (Dach)" icon={<Home size={20} />}>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {ROOF_TYPES.map(rt => (
-            <button key={rt.type} onClick={() => updateConfig('roofType', rt.type)} className={`p-3 rounded-xl border text-sm font-medium transition-all flex flex-col items-center text-center gap-2 ${config.roofType === rt.type ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm' : 'border-zinc-200 hover:border-zinc-300 text-zinc-700 bg-white'}`}>
+            <button key={rt.type} onClick={() => updateConfig('roofType', rt.type)} className={`p-3 rounded-xl border text-sm font-medium transition-all flex flex-col items-center text-center gap-2 ${config.roofType === rt.type ? 'border-[var(--theme)] bg-zinc-100 text-[var(--theme)] shadow-sm' : 'border-zinc-200 hover:border-zinc-300 text-zinc-700 bg-white'}`}>
               <RoofIcon type={rt.type} />{rt.label}
             </button>
           ))}
@@ -288,7 +193,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <span className="font-medium text-sm text-zinc-700">Rynny i Rury Spadowe</span>
           <label className="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" checked={config.gutters} onChange={(e) => updateConfig('gutters', e.target.checked)} className="sr-only peer" />
-            <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+            <div className={`w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${config.gutters ? 'bg-[var(--theme)]' : ''}`}></div>
           </label>
         </div>
       </Section>
@@ -296,10 +201,10 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       {/* 2. WYMIARY */}
       <Section title="Wymiary Główne" icon={<Maximize size={20} />}>
         <div className="space-y-6">
-          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: 'Wysokość (ściana)', key: 'height' as const, min: 200, max: 350, step: 5 }].map(dim => (
+          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: 'Wysokość', key: 'height' as const, min: 200, max: 350, step: 5 }].map(dim => (
             <div key={dim.key}>
-              <div className="flex justify-between mb-2 text-sm font-semibold text-zinc-700"><label>{dim.label}</label><span className="bg-white px-2 py-1 rounded border border-zinc-200">{config[dim.key]} cm</span></div>
-              <input type="range" min={dim.min} max={dim.max} step={dim.step} value={config[dim.key]} onChange={(e) => updateConfig(dim.key, Number(e.target.value))} className="w-full accent-orange-600" />
+              <div className="flex justify-between mb-2 text-sm font-semibold text-zinc-700"><label>{dim.label}</label><span className="bg-white px-2 py-1 rounded border border-zinc-200 text-[var(--theme)] font-bold">{config[dim.key]} cm</span></div>
+              <input type="range" min={dim.min} max={dim.max} step={dim.step} value={config[dim.key]} onChange={(e) => updateConfig(dim.key, Number(e.target.value))} className="w-full" style={{accentColor: 'var(--theme)'}} />
             </div>
           ))}
         </div>
@@ -311,8 +216,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <div className="flex justify-between items-center mb-3">
             <span className="text-sm font-medium text-zinc-700">Ilość bram (przód)</span>
             <div className="flex gap-2 bg-white rounded-lg border border-zinc-200 p-1">
-              <button onClick={() => { if (gates.length === 2) removeElement(gates[1].id); if (gates.length === 0) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 1 ? 'bg-orange-100 font-bold text-orange-700' : ''}`}>1</button>
-              <button onClick={() => { if (gates.length < 2) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 2 ? 'bg-orange-100 font-bold text-orange-700' : ''}`}>2</button>
+              <button onClick={() => { if (gates.length === 2) removeElement(gates[1].id); if (gates.length === 0) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 1 ? 'bg-zinc-100 font-bold text-[var(--theme)]' : ''}`}>1</button>
+              <button onClick={() => { if (gates.length < 2) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 2 ? 'bg-zinc-100 font-bold text-[var(--theme)]' : ''}`}>2</button>
             </div>
           </div>
         </div>
@@ -323,18 +228,16 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-bold text-zinc-800">Brama #{i+1}</h3>
               <select value={gate.gateType} onChange={(e) => { setSelectedWall('front'); updateElement(gate.id, { gateType: e.target.value as GateType, isOpen: false }); }} className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50">
-                <option value="up-and-over">Uchylna</option>
-                <option value="swing">Dwuskrzydłowa</option>
-                <option value="sectional">Segmentowa</option>
+                <option value="up-and-over">Uchylna</option><option value="swing">Dwuskrzydłowa</option><option value="sectional">Segmentowa</option>
               </select>
             </div>
-            <div className="mb-3"><button onClick={() => updateElement(gate.id, { isOpen: !gate.isOpen })} className={`w-full py-2 rounded-lg text-sm font-bold transition-colors border ${gate.isOpen ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}>{gate.isOpen ? 'Zamknij Bramę' : 'Otwórz Bramę'}</button></div>
+            <div className="mb-3"><button onClick={() => updateElement(gate.id, { isOpen: !gate.isOpen })} className={`w-full py-2 rounded-lg text-sm font-bold transition-colors border ${gate.isOpen ? 'bg-zinc-100 text-[var(--theme)] border-zinc-300' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}>{gate.isOpen ? 'Zamknij Bramę' : 'Otwórz Bramę'}</button></div>
             {gate.gateType !== 'sectional' && gate.gateType !== 'swing' && (
               <div className="mb-3">
                 <span className="text-xs text-zinc-500 block mb-2">Położenie klamki:</span>
                 <div className="flex gap-2 bg-zinc-100 rounded-lg p-1 border">
-                  <button onClick={() => updateElement(gate.id, { hingeSide: 'left' })} className={`flex-1 py-1 rounded text-xs ${gate.hingeSide === 'left' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Po lewej (klamka z prawej)</button>
-                  <button onClick={() => updateElement(gate.id, { hingeSide: 'right' })} className={`flex-1 py-1 rounded text-xs ${gate.hingeSide === 'right' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Po prawej (klamka z lewej)</button>
+                  <button onClick={() => updateElement(gate.id, { hingeSide: 'left' })} className={`flex-1 py-1 rounded text-xs ${gate.hingeSide === 'left' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Klamka z prawej</button>
+                  <button onClick={() => updateElement(gate.id, { hingeSide: 'right' })} className={`flex-1 py-1 rounded text-xs ${gate.hingeSide === 'right' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Klamka z lewej</button>
                 </div>
               </div>
             )}
@@ -344,7 +247,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             </div>
             <div>
               <div className="flex justify-between text-xs text-zinc-500 mb-1"><span>Pozycja X</span><span>{gate.x} cm</span></div>
-              <input type="range" min={-(config.width / 2) + gate.width/2} max={(config.width / 2) - gate.width/2} step={5} value={gate.x} onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })} className="w-full accent-zinc-800" />
+              <input type="range" min={-(config.width / 2) + gate.width/2} max={(config.width / 2) - gate.width/2} step={5} value={gate.x} onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />
             </div>
           </div>
         ))}
@@ -363,9 +266,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           </div>
         </div>
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-          <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-orange-500"><Plus size={16} /> Drzwi</button>
-          <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-orange-500"><Plus size={16} /> Okno Std</button>
-          <button onClick={() => addElement('pvc-window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-orange-500"><Plus size={16} /> Okno PCV</button>
+          <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Drzwi</button>
+          <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Okno</button>
         </div>
         <div className="space-y-3">
           {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (
@@ -374,7 +276,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').map((el, idx) => (
               <div key={el.id} className="bg-white p-3 rounded-xl border border-zinc-200 shadow-sm relative group">
                 <button onClick={() => removeElement(el.id)} className="absolute top-3 right-3 text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
-                <h3 className="font-semibold text-zinc-800 mb-3 capitalize">{el.type === 'door' ? 'Drzwi' : el.type === 'window' ? 'Okno Std' : 'Okno PCV'} #{idx + 1}</h3>
+                <h3 className="font-semibold text-zinc-800 mb-3 capitalize">{el.type === 'door' ? 'Drzwi' : 'Okno'} #{idx + 1}</h3>
                 <div className="space-y-3">
                   {el.type === 'door' && (
                     <div className="mb-3">
@@ -391,11 +293,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                   </div>
                   <div>
                     <div className="flex justify-between text-xs text-zinc-500 mb-1"><span>Pozycja X</span><span>{el.x} cm</span></div>
-                    <input type="range" min={-((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) + el.width/2} max={((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) - el.width/2} step={5} value={el.x} onChange={(e) => updateElement(el.id, { x: Number(e.target.value) })} className="w-full accent-zinc-800" />
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-xs text-zinc-500 mb-1"><span>Pozycja Y (od ziemi)</span><span>{el.y} cm</span></div>
-                    <input type="range" min={0} max={config.height - el.height} step={5} value={el.y} onChange={(e) => updateElement(el.id, { y: Number(e.target.value) })} className="w-full accent-zinc-800" />
+                    <input type="range" min={-((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) + el.width/2} max={((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) - el.width/2} step={5} value={el.x} onChange={(e) => updateElement(el.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />
                   </div>
                 </div>
               </div>
@@ -409,14 +307,13 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🏠 Dach</h3>
           <div className="space-y-3">
             <div>
-              <span className="text-xs text-zinc-500 block mb-2">Profil dachu</span>
               <div className="flex gap-2">
-                {([{ value: 'trapez-t14' as RoofProfile, label: 'Trapez T-14' }, { value: 'rabek' as RoofProfile, label: 'Rąbek stojący' }, { value: 'blachodachowka' as RoofProfile, label: 'Blachodachówka' }]).map(p => (
+                {([{ value: 'trapez-t14' as RoofProfile, label: 'Trapez T-14' }, { value: 'blachodachowka' as RoofProfile, label: 'Blacho-dach.' }]).map(p => (
                   <button key={p.value} onClick={() => {
                       const updates: Partial<GarageConfig> = { roofProfile: p.value };
                       if (p.value === 'blachodachowka' && !TILE_COLORS.map(c => c.color).includes(config.roofColor)) updates.roofColor = '#3b3b3c';
                       setConfig(prev => ({ ...prev, ...updates }));
-                    }} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.roofProfile === p.value ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
+                    }} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.roofProfile === p.value ? 'border-[var(--theme)] bg-zinc-100 text-[var(--theme)]' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
                     {p.label}
                   </button>
                 ))}
@@ -432,14 +329,13 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🧱 Ściany</h3>
           <div className="space-y-3">
             <div>
-              <span className="text-xs text-zinc-500 block mb-2">Profil ścian</span>
               <div className="flex gap-2">
                 {([{ value: 'trapez-t7' as WallProfile, label: 'Trapez T-7' }, { value: 'ocynk' as WallProfile, label: 'Ocynk' }, { value: 'drewnopodobna' as WallProfile, label: 'Drewnopodobna' }]).map(p => (
                   <button key={p.value} onClick={() => {
                       const updates: Partial<GarageConfig> = { wallProfile: p.value };
                       if (p.value === 'ocynk') updates.wallColor = '#d4d4d4';
                       setConfig(prev => ({ ...prev, ...updates }));
-                    }} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.wallProfile === p.value ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
+                    }} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.wallProfile === p.value ? 'border-[var(--theme)] bg-zinc-100 text-[var(--theme)]' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
                     {p.label}
                   </button>
                 ))}
@@ -464,10 +360,9 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🚪 Brama Główna</h3>
           <div className="space-y-3">
             <div>
-              <span className="text-xs text-zinc-500 block mb-2">Profil bramy</span>
               <div className="flex gap-2">
                 {([{ value: 'trapez-t7' as GateProfile, label: 'Trapez T-7' }, { value: 'drewnopodobna' as GateProfile, label: 'Drewnopodobna' }]).map(p => (
-                  <button key={p.value} onClick={() => updateConfig('gateProfile', p.value)} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.gateProfile === p.value ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>{p.label}</button>
+                  <button key={p.value} onClick={() => updateConfig('gateProfile', p.value)} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.gateProfile === p.value ? 'border-[var(--theme)] bg-zinc-100 text-[var(--theme)]' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>{p.label}</button>
                 ))}
               </div>
             </div>
@@ -486,50 +381,21 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             </div>
           </div>
         </div>
-        <hr className="border-zinc-200 my-4" />
-        <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🚪 Drzwi Boczne</h3>
-          <div className="space-y-3">
-            <div>
-              <span className="text-xs text-zinc-500 block mb-2">Profil drzwi</span>
-              <div className="flex gap-2">
-                {([{ value: 'trapez-t7' as DoorProfile, label: 'Trapez T-7' }, { value: 'drewnopodobna' as DoorProfile, label: 'Drewnopodobna' }]).map(p => (
-                  <button key={p.value} onClick={() => updateConfig('doorProfile', p.value)} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.doorProfile === p.value ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>{p.label}</button>
-                ))}
-              </div>
-            </div>
-            {config.doorProfile !== 'ocynk' && config.elements.some(e => e.type === 'door') && (
-              <div className="mb-3">
-                <span className="text-xs text-zinc-500 block mb-2">Układ przetłoczeń:</span>
-                <div className="flex gap-2 bg-zinc-100 rounded-lg p-1 border">
-                  <button onClick={() => updateConfig('doorRibbing', 'vertical')} className={`flex-1 py-1 rounded text-xs ${config.doorRibbing === 'vertical' || !config.doorRibbing ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Pionowe</button>
-                  <button onClick={() => updateConfig('doorRibbing', 'horizontal')} className={`flex-1 py-1 rounded text-xs ${config.doorRibbing === 'horizontal' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Poziome</button>
-                </div>
-              </div>
-            )}
-            <div>
-              <span className="text-xs text-zinc-500 block mb-2">Kolor drzwi</span>
-              {config.doorProfile === 'drewnopodobna' ? <ColorPicker colors={WOOD_COLORS.map(c=>c.color)} value={config.doorColor} onChange={(c) => updateConfig('doorColor', c)} labels={Object.fromEntries(WOOD_COLORS.map(c => [c.color, c.label]))} /> : <ColorPicker colors={STANDARD_COLORS} value={config.doorColor} onChange={(c) => updateConfig('doorColor', c)} />}
-            </div>
-          </div>
-        </div>
-        <hr className="border-zinc-200 my-4" />
-        <div><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🪟 Ramy Okien (RAL)</h3>
-          <ColorPicker colors={RAL_COLORS.map(c=>c.color)} value={config.windowColor} onChange={(c) => updateConfig('windowColor', c)} labels={Object.fromEntries(RAL_COLORS.map(c => [c.color, c.label]))} />
-        </div>
       </Section>
 
       {/* 6. DYNAMICZNE DODATKI Z WORDPRESSA */}
       {customAddons.length > 0 && (
         <Section title="Opcje Dodatkowe" icon={<Plus size={20} />}>
           <div className="space-y-3">
-            {customAddons.map(addon => (
+            {customAddons.map((addon: any) => (
               <label key={addon.id} className="flex items-center justify-between p-3 border border-zinc-200 rounded-xl cursor-pointer hover:bg-zinc-50 transition-colors">
                 <div className="flex items-center gap-3">
                   <input 
                     type="checkbox" 
                     checked={selectedAddons.includes(addon.id)}
                     onChange={() => handleAddonToggle(addon.id)}
-                    className="w-5 h-5 text-orange-600 border-zinc-300 rounded focus:ring-orange-500"
+                    className="w-5 h-5 border-zinc-300 rounded"
+                    style={{accentColor: 'var(--theme)'}}
                   />
                   <span className="text-sm font-medium text-zinc-700">{addon.label}</span>
                 </div>
@@ -542,8 +408,35 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </Section>
       )}
 
-      {/* JEDYNY, FINALNY PRZYCISK KOSZYKA */}
-      <OrderButton config={config} totalPrice={calculatedPrice} targetStoreUrl={targetStoreUrl} selectedAddonsText={selectedAddonsText} />
+      {/* DOLNY KOSZYK ZAMÓWIENIA */}
+      <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
+        <div className="flex flex-col gap-2 mb-4">
+          <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
+          <select value={region} onChange={(e) => setRegion(e.target.value)} className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium" style={{border: region ? '2px solid var(--theme)' : 'none'}} required >
+            <option value="" disabled>Wybierz z listy...</option>
+            {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
+          </select>
+        </div>
+
+        <div className="flex justify-between items-end mb-6 pb-4 border-b border-zinc-700">
+          <span className="text-zinc-400 font-medium">Cena całkowita:</span>
+          <span className="text-3xl font-extrabold text-[var(--theme)]">{calculatedPrice} zł</span>
+        </div>
+        
+        <form ref={formRef} method="POST" action={appData.storeUrl} target="_parent">
+          <input type="hidden" name="custom_garage_checkout" value="1" />
+          <input type="hidden" name="garage_price" value={calculatedPrice} />
+          <input type="hidden" name="garage_wojewodztwo" value={region} />
+          <input type="hidden" name="garage_config" value={JSON.stringify(config)} />
+          <input type="hidden" name="garage_dynamic_addons" value={selectedAddonsText} />
+          <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
+          
+          <button onClick={handleOrder} disabled={!region} className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 ${region ? 'bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}>
+            {region ? 'Kupuję i płacę' : 'Wybierz województwo'}
+          </button>
+        </form>
+      </div>
+
     </div>
   );
 }
