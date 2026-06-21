@@ -75,18 +75,25 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState("");
 
-  // ZUPEŁNIE OTWARTY ODCZYT CEN Z WORDPRESSA
+  // POBIERANIE CENNIKA Z OMINIĘCIEM BŁĘDU 404
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const envWpUrl = process.env.NEXT_PUBLIC_WP_URL || "https://konfigurator.skillup-szkolenia.pl";
-      const storeUrl = params.get('store_url') || envWpUrl;
-      const cleanStoreUrl = decodeURIComponent(storeUrl).replace(/\/$/, "");
-      setTargetStoreUrl(cleanStoreUrl);
+      
+      // store_url służy do wysyłania formularza KUP TERAZ
+      const storeUrl = params.get('store_url') ? decodeURIComponent(params.get('store_url') as string) : envWpUrl;
+      setTargetStoreUrl(storeUrl);
 
-      // Uderzamy do całkowicie otwartego API. Bez haseł, bez tokenów!
-      fetch(`${cleanStoreUrl}/wp-json/garage/v1/config?t=${new Date().getTime()}`, { cache: 'no-store' })
-        .then(res => res.json())
+      // api_url to czysty, główny adres WordPressa do pobierania cennika!
+      const apiUrl = params.get('api_url') ? decodeURIComponent(params.get('api_url') as string) : envWpUrl;
+      const cleanApiUrl = apiUrl.replace(/\/$/, "");
+
+      fetch(`${cleanApiUrl}/wp-json/garage/v1/config?t=${new Date().getTime()}`, { cache: 'no-store' })
+        .then(res => {
+          if (!res.ok) throw new Error("Błąd API: " + res.status);
+          return res.json();
+        })
         .then(data => {
           if (data && data.pricing && data.pricing.base !== undefined) {
             setPricingParams({
@@ -134,7 +141,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       else percentMultiplier += (pricingParams.gutterVal / 100);
     }
 
-    // Dodanie ceny Dynamicznych Dodatków (Wiata, Folia itp.)
     let customAddonTotal = 0;
     selectedAddons.forEach(addonId => {
       const addon = customAddons.find(a => a.id === addonId);
