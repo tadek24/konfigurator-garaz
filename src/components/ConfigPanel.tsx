@@ -4,14 +4,14 @@ import { GarageConfig, RoofType, WallFace, GarageElement, GateType, RoofProfile,
 import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useMemo, useState, useRef, Dispatch, SetStateAction, useEffect } from 'react';
 
 interface ConfigPanelProps {
   config: GarageConfig;
-  setConfig: React.Dispatch<React.SetStateAction<GarageConfig>>;
+  setConfig: Dispatch<SetStateAction<GarageConfig>>;
   selectedWall: WallFace;
-  setSelectedWall: (wall: WallFace) => void;
-  appData: any; // Dane wstrzyknięte bezpośrednio z WordPressa!
+  setSelectedWall: Dispatch<SetStateAction<WallFace>>;
+  appData: any;
 }
 
 const WOJEWODZTWA = ["Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubuskie", "Łódzkie", "Małopolskie", "Mazowieckie", "Opolskie", "Podkarpackie", "Podlaskie", "Pomorskie", "Śląskie", "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"];
@@ -56,64 +56,10 @@ function ColorPicker({ colors, value, onChange, labels }: { colors: string[]; va
   );
 }
 
-export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData }: ConfigPanelProps) {
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+function OrderButton({ config, totalPrice, targetStoreUrl, selectedAddonsText }: { config: GarageConfig; totalPrice: number; targetStoreUrl: string; selectedAddonsText: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [region, setRegion] = useState("");
-
-  const pricing = appData.pricing;
-  const customAddons = appData.addons || [];
-
-  // MOCNY SILNIK MATEMATYCZNY (Różnica od bazy + Akcesoria)
-  const calculatedPrice = useMemo(() => {
-    let total = appData.baseConfig.p; // Cena bazowa
-    let percentMultiplier = 1;
-    
-    // 1. Obliczanie DOPŁATY za metry (tylko to co ponad bazę)
-    const baseArea = (appData.baseConfig.w / 100) * (appData.baseConfig.l / 100);
-    const currentArea = (config.width / 100) * (config.length / 100);
-    const extraArea = Math.max(0, currentArea - baseArea); // Klient nie dostanie zniżki jeśli zmniejszy
-    
-    if (extraArea > 0) {
-      if (pricing.sqm_t === 'fixed') total += (extraArea * pricing.sqm_v);
-      else percentMultiplier += (extraArea * pricing.sqm_v / 100);
-    }
-
-    // 2. Akcesoria sztukowe
-    const doorsCount = config.elements.filter(e => e.type === 'door').length;
-    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
-    
-    if (pricing.door_t === 'fixed') total += (doorsCount * pricing.door_v);
-    else percentMultiplier += (doorsCount * pricing.door_v / 100);
-
-    if (pricing.window_t === 'fixed') total += (windowsCount * pricing.window_v);
-    else percentMultiplier += (windowsCount * pricing.window_v / 100);
-
-    // 3. Materiały / Kolory
-    const isWood = config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna';
-    if (isWood) {
-      if (pricing.wood_t === 'fixed') total += pricing.wood_v;
-      else percentMultiplier += (pricing.wood_v / 100);
-    }
-    if (config.gutters) {
-      if (pricing.gutter_t === 'fixed') total += pricing.gutter_v;
-      else percentMultiplier += (pricing.gutter_v / 100);
-    }
-
-    // 4. Custom Dodatki z WordPressa
-    let customAddonTotal = 0;
-    selectedAddons.forEach(addonId => {
-      const addon = customAddons.find((a: any) => a.id === addonId);
-      if (addon) {
-        if (addon.type === 'fixed') customAddonTotal += Number(addon.price);
-        if (addon.type === 'pct') percentMultiplier += (Number(addon.price) / 100);
-      }
-    });
-
-    return Math.round((total * percentMultiplier) + customAddonTotal);
-  }, [config, pricing, selectedAddons, customAddons, appData]);
-
 
   const handleOrder = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -131,9 +77,91 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           inputImgRef.current.value = tempCanvas.toDataURL('image/jpeg', 0.7); 
           formRef.current.submit();
         }
-      } catch (err) { alert("Błąd zdjęcia"); }
+      } catch (err) { alert("Błąd zapisu widoku."); }
     } else { alert("Błąd 3D."); }
   };
+
+  return (
+    <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
+      <div className="flex flex-col gap-2 mb-4">
+        <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
+        <select value={region} onChange={(e) => setRegion(e.target.value)} className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2" style={{border: region ? '2px solid var(--theme)' : 'none'}} required >
+          <option value="" disabled>Wybierz z listy...</option>
+          {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
+        </select>
+      </div>
+
+      <div className="flex justify-between items-end mb-6 pb-4 border-b border-zinc-700">
+        <span className="text-zinc-400 font-medium">Cena całkowita:</span>
+        <span className="text-3xl font-extrabold text-[var(--theme)]">{totalPrice} zł</span>
+      </div>
+      
+      <form ref={formRef} method="POST" action={targetStoreUrl} target="_parent">
+        <input type="hidden" name="custom_garage_checkout" value="1" />
+        <input type="hidden" name="garage_price" value={totalPrice} />
+        <input type="hidden" name="garage_wojewodztwo" value={region} />
+        <input type="hidden" name="garage_config" value={JSON.stringify(config)} />
+        <input type="hidden" name="garage_dynamic_addons" value={selectedAddonsText} />
+        <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
+        
+        <button onClick={handleOrder} disabled={!region} className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 ${region ? 'bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}>
+          {region ? 'Kupuję i płacę' : 'Wybierz województwo'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData }: ConfigPanelProps) {
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  
+  const pricing = appData.pricing;
+  const customAddons = appData.addons || [];
+
+  const calculatedPrice = useMemo(() => {
+    let total = appData.baseConfig.p; // Cena startowa
+    let percentMultiplier = 1;
+    
+    // Różnica w m2
+    const baseArea = (appData.baseConfig.w / 100) * (appData.baseConfig.l / 100);
+    const currentArea = (config.width / 100) * (config.length / 100);
+    const extraArea = Math.max(0, currentArea - baseArea); 
+    
+    if (extraArea > 0) {
+      if (pricing.sqm_t === 'fixed') total += (extraArea * pricing.sqm_v);
+      else percentMultiplier += (extraArea * pricing.sqm_v / 100);
+    }
+
+    const doorsCount = config.elements.filter(e => e.type === 'door').length;
+    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
+    
+    if (pricing.door_t === 'fixed') total += (doorsCount * pricing.door_v);
+    else percentMultiplier += (doorsCount * pricing.door_v / 100);
+
+    if (pricing.window_t === 'fixed') total += (windowsCount * pricing.window_v);
+    else percentMultiplier += (windowsCount * pricing.window_v / 100);
+
+    const isWood = config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna';
+    if (isWood) {
+      if (pricing.wood_t === 'fixed') total += pricing.wood_v;
+      else percentMultiplier += (pricing.wood_v / 100);
+    }
+    if (config.gutters) {
+      if (pricing.gutter_t === 'fixed') total += pricing.gutter_v;
+      else percentMultiplier += (pricing.gutter_v / 100);
+    }
+
+    let customAddonTotal = 0;
+    selectedAddons.forEach(addonId => {
+      const addon = customAddons.find((a: any) => a.id === addonId);
+      if (addon) {
+        if (addon.type === 'fixed') customAddonTotal += Number(addon.price);
+        if (addon.type === 'pct') percentMultiplier += (Number(addon.price) / 100);
+      }
+    });
+
+    return Math.round((total * percentMultiplier) + customAddonTotal);
+  }, [config, pricing, selectedAddons, customAddons, appData]);
 
   const handleAddonToggle = (addonId: string) => setSelectedAddons(prev => prev.includes(addonId) ? prev.filter(id => id !== addonId) : [...prev, addonId]);
   const selectedAddonsText = selectedAddons.map(id => customAddons.find((a:any) => a.id === id)?.label).filter(Boolean).join(", ");
@@ -178,9 +206,25 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
+  useEffect(() => {
+    if (config.roofType === 'slope-front') {
+      const maxH = config.height - 30;
+      let changed = false;
+      const newElements = config.elements.map(el => {
+        if (el.wall === 'front' && el.type === 'gate') {
+          const updated = { ...el };
+          if (updated.height > maxH) { updated.height = maxH; changed = true; }
+          if (updated.clearanceHeight && updated.clearanceHeight > maxH) { updated.clearanceHeight = maxH; changed = true; }
+          return updated;
+        }
+        return el;
+      });
+      if (changed) setConfig(prev => ({ ...prev, elements: newElements }));
+    }
+  }, [config.roofType, config.height, config.elements, setConfig]);
+
   return (
     <div className="space-y-4 pb-12">
-      {/* 1. TYP GARAŻU */}
       <Section title="Typ Garażu (Dach)" icon={<Home size={20} />}>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {ROOF_TYPES.map(rt => (
@@ -198,7 +242,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
-      {/* 2. WYMIARY */}
       <Section title="Wymiary Główne" icon={<Maximize size={20} />}>
         <div className="space-y-6">
           {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: 'Wysokość', key: 'height' as const, min: 200, max: 350, step: 5 }].map(dim => (
@@ -210,7 +253,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
-      {/* 3. BRAMY */}
       <Section title="Parametry Bram" icon={<BoxSelect size={20} />}>
         <div className="mb-4">
           <div className="flex justify-between items-center mb-3">
@@ -253,7 +295,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         ))}
       </Section>
 
-      {/* 4. DODATKI KONSTRUKCYJNE (DRZWI/OKNA) */}
       <Section title="Drzwi i Okna" icon={<Layers size={20} />}>
         <div className="mb-4">
           <label className="text-sm font-medium text-zinc-700 block mb-2">Edytuj ścianę:</label>
@@ -302,7 +343,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
-      {/* 5. KOLORY */}
       <Section title="Kolory i Przetłoczenia" icon={<PaintBucket size={20} />} defaultOpen={false}>
         <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🏠 Dach</h3>
           <div className="space-y-3">
@@ -383,60 +423,23 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
-      {/* 6. DYNAMICZNE DODATKI Z WORDPRESSA */}
       {customAddons.length > 0 && (
         <Section title="Opcje Dodatkowe" icon={<Plus size={20} />}>
           <div className="space-y-3">
             {customAddons.map((addon: any) => (
               <label key={addon.id} className="flex items-center justify-between p-3 border border-zinc-200 rounded-xl cursor-pointer hover:bg-zinc-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <input 
-                    type="checkbox" 
-                    checked={selectedAddons.includes(addon.id)}
-                    onChange={() => handleAddonToggle(addon.id)}
-                    className="w-5 h-5 border-zinc-300 rounded"
-                    style={{accentColor: 'var(--theme)'}}
-                  />
+                  <input type="checkbox" checked={selectedAddons.includes(addon.id)} onChange={() => handleAddonToggle(addon.id)} className="w-5 h-5 border-zinc-300 rounded" style={{accentColor: 'var(--theme)'}} />
                   <span className="text-sm font-medium text-zinc-700">{addon.label}</span>
                 </div>
-                <span className="text-sm font-bold text-zinc-900">
-                  +{addon.price}{addon.type === 'pct' ? '%' : ' zł'}
-                </span>
+                <span className="text-sm font-bold text-zinc-900">+{addon.price}{addon.type === 'pct' ? '%' : ' zł'}</span>
               </label>
             ))}
           </div>
         </Section>
       )}
 
-      {/* DOLNY KOSZYK ZAMÓWIENIA */}
-      <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
-        <div className="flex flex-col gap-2 mb-4">
-          <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
-          <select value={region} onChange={(e) => setRegion(e.target.value)} className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium" style={{border: region ? '2px solid var(--theme)' : 'none'}} required >
-            <option value="" disabled>Wybierz z listy...</option>
-            {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
-          </select>
-        </div>
-
-        <div className="flex justify-between items-end mb-6 pb-4 border-b border-zinc-700">
-          <span className="text-zinc-400 font-medium">Cena całkowita:</span>
-          <span className="text-3xl font-extrabold text-[var(--theme)]">{calculatedPrice} zł</span>
-        </div>
-        
-        <form ref={formRef} method="POST" action={appData.storeUrl} target="_parent">
-          <input type="hidden" name="custom_garage_checkout" value="1" />
-          <input type="hidden" name="garage_price" value={calculatedPrice} />
-          <input type="hidden" name="garage_wojewodztwo" value={region} />
-          <input type="hidden" name="garage_config" value={JSON.stringify(config)} />
-          <input type="hidden" name="garage_dynamic_addons" value={selectedAddonsText} />
-          <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
-          
-          <button onClick={handleOrder} disabled={!region} className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 ${region ? 'bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'}`}>
-            {region ? 'Kupuję i płacę' : 'Wybierz województwo'}
-          </button>
-        </form>
-      </div>
-
+      <OrderButton config={config} totalPrice={calculatedPrice} targetStoreUrl={appData.storeUrl} selectedAddonsText={selectedAddonsText} />
     </div>
   );
 }

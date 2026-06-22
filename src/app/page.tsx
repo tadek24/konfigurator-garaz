@@ -6,13 +6,12 @@ import ConfigPanel from '@/components/ConfigPanel';
 import { v4 as uuidv4 } from 'uuid';
 import dynamic from 'next/dynamic';
 
-// Rozwiązanie błędu "width" z Vercela - ładujemy 3D tylko w przeglądarce!
 const CanvasArea = dynamic(() => import('@/components/CanvasArea'), { 
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-full w-full bg-zinc-900 text-orange-500">
       <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="text-xs font-bold tracking-widest text-zinc-400 uppercase">Wczytywanie silnika 3D...</p>
+      <p className="text-xs font-bold tracking-widest text-zinc-400 uppercase">Łączenie z bazą WordPress...</p>
     </div>
   )
 });
@@ -20,28 +19,20 @@ const CanvasArea = dynamic(() => import('@/components/CanvasArea'), {
 const INITIAL_CONFIG: GarageConfig = {
   width: 300, length: 500, height: 210,
   roofType: 'dual-slope', gutters: false,
-  elements: [
-    { id: uuidv4(), type: 'gate', wall: 'front', x: 0, y: 0, width: 250, height: 200, clearanceHeight: 190, gateType: 'up-and-over', hingeSide: 'left' }
-  ],
-  roofColor: '#3b3b3c', roofProfile: 'trapez-t14',
-  wallColor: '#e3e3e3', wallProfile: 'trapez-t7',
-  gateColor: '#3b3b3c', gateProfile: 'trapez-t7',
-  doorColor: '#3b3b3c', doorProfile: 'trapez-t7',
-  windowColor: '#ffffff',
+  elements: [{ id: uuidv4(), type: 'gate', wall: 'front', x: 0, y: 0, width: 250, height: 200, clearanceHeight: 190, gateType: 'up-and-over', hingeSide: 'left' }],
+  roofColor: '#3b3b3c', roofProfile: 'trapez-t14', wallColor: '#e3e3e3', wallProfile: 'trapez-t7', gateColor: '#3b3b3c', gateProfile: 'trapez-t7', doorColor: '#3b3b3c', doorProfile: 'trapez-t7', windowColor: '#ffffff',
 };
 
-const CONFIG_STEPS = [
-  { id: 1, label: 'Dach' }, { id: 2, label: 'Wymiary' }, 
-  { id: 3, label: 'Bramy i Otoczenie' }, { id: 4, label: 'Kolory' }
-];
+const CONFIG_STEPS = [{ id: 1, label: 'Dach' }, { id: 2, label: 'Wymiary' }, { id: 3, label: 'Bramy i Otoczenie' }, { id: 4, label: 'Kolory' }];
 
 export default function Home() {
   const [config, setConfig] = useState<GarageConfig>(INITIAL_CONFIG);
-  const [appData, setAppData] = useState<any>(null); // Dane cennika z WordPressa
+  const [appData, setAppData] = useState<any>(null);
   const [selectedWall, setSelectedWall] = useState<WallFace>('front');
   const [activeStep, setActiveStep] = useState(1);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [wpAdminUrl, setWpAdminUrl] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -49,47 +40,37 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     const savedConfigBase64 = params.get('load_config');
 
-    // 1. Tryb odczytu (Karta Zamówienia 360° w panelu Admina)
+    // WIDOK 360 W PANELU ZAMÓWIEŃ
     if (savedConfigBase64) {
       try {
         setConfig(JSON.parse(decodeURIComponent(escape(window.atob(savedConfigBase64)))));
         setIsReadOnly(true);
-        const storeUrl = params.get('store_url') || "https://konfigurator.skillup-szkolenia.pl";
-        setWpAdminUrl(`${decodeURIComponent(storeUrl).replace(/\/$/, "")}/wp-admin/admin.php?page=garage-orders`);
-        setAppData({ themeColor: '#ea580c' }); // Minimalne dane, żeby ominąć ekran ładowania
+        const storeUrl = params.get('store_url') || process.env.NEXT_PUBLIC_WP_URL || "https://konfigurator.skillup-szkolenia.pl";
+        setWpAdminUrl(`${storeUrl.replace(/\/$/, "")}/wp-admin/admin.php?page=garage-orders`);
+        setAppData({ themeColor: '#ea580c' }); 
       } catch (e) { console.error(e); }
       return;
     }
 
-    // 2. Odbiór cennika z WordPressa (Ukryty przekaz Iframe)
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data?.type === 'GARAGE_INIT') {
-        const payload = e.data.payload;
-        setAppData(payload);
-        setConfig(prev => ({ ...prev, width: payload.baseConfig.w, length: payload.baseConfig.l, height: payload.baseConfig.h }));
+    // POBIERANIE CENNIKA PRZEZ NASZEGO BEZPIECZNEGO AGENTA W VERCELU
+    const fetchConfig = async () => {
+      const storeUrl = params.get('store_url') || "";
+      try {
+        const res = await fetch(`/api/config?store_url=${encodeURIComponent(storeUrl)}`);
+        const data = await res.json();
+        if (data.pricing) {
+          setAppData(data);
+          // Ustawia wymiary startowe dokładnie na takie, jakie wpisałeś w WordPressie!
+          setConfig(prev => ({ ...prev, width: data.baseConfig.w, length: data.baseConfig.l, height: data.baseConfig.h }));
+        } else {
+          setError("Nie udało się odczytać cennika.");
+        }
+      } catch (err) {
+        setError("Błąd połączenia z serwerem. Odśwież stronę.");
       }
     };
-    window.addEventListener('message', handleMessage);
-    window.parent.postMessage('GARAGE_READY', '*');
 
-    // 3. FALLBACK: Jeśli wchodzisz z linku na Vercel (po 1,5s załaduj bazowy cennik)
-    const timer = setTimeout(() => {
-      setAppData((prev: any) => {
-        if (!prev) {
-          const fallback = {
-            storeUrl: "https://konfigurator.skillup-szkolenia.pl", themeColor: "#ea580c",
-            baseConfig: { w: 300, l: 500, h: 210, p: 5000 },
-            pricing: { sqm_t: 'fixed', sqm_v: 150, door_t: 'fixed', door_v: 350, window_t: 'fixed', window_v: 250, wood_t: 'pct', wood_v: 15, gutter_t: 'pct', gutter_v: 5 },
-            addons: []
-          };
-          setConfig(c => ({ ...c, width: fallback.baseConfig.w, length: fallback.baseConfig.l, height: fallback.baseConfig.h }));
-          return fallback;
-        }
-        return prev;
-      });
-    }, 1500);
-
-    return () => { window.removeEventListener('message', handleMessage); clearTimeout(timer); };
+    fetchConfig();
   }, []);
 
   const handleScroll = (e: UIEvent<HTMLDivElement>) => {
@@ -104,17 +85,9 @@ export default function Home() {
     else setActiveStep(5);
   };
 
-  // Zabezpieczenie przed pokazaniem pustego interfejsu
-  if (!appData) {
-    return (
-      <div className="flex items-center justify-center h-screen w-full bg-zinc-900 text-white flex-col gap-4">
-        <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-medium tracking-wide">Pobieranie aktualnego cennika...</p>
-      </div>
-    );
-  }
+  if (error) return <div className="flex h-screen items-center justify-center text-red-500 bg-zinc-900 font-bold">{error}</div>;
+  if (!appData) return <div className="flex h-screen items-center justify-center bg-zinc-900"><div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"></div></div>;
 
-  // WIDOK 360 DLA ADMINA WP
   if (isReadOnly) {
     return (
       <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-zinc-50" style={{ '--theme': appData.themeColor } as React.CSSProperties}>
@@ -149,7 +122,6 @@ export default function Home() {
     );
   }
 
-  // WIDOK KONFIGURATORA DLA KLIENTA
   return (
     <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-zinc-50" style={{ '--theme': appData.themeColor } as React.CSSProperties}>
       <div className="w-full h-[40vh] md:h-full md:w-[60%] relative bg-zinc-900 shadow-inner">
@@ -171,7 +143,6 @@ export default function Home() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar scroll-smooth" onScroll={handleScroll}>
-          {/* PRZEKAZUJEMY APPDATA! Zero błędów kompilacji. */}
           <ConfigPanel config={config} setConfig={setConfig} selectedWall={selectedWall} setSelectedWall={setSelectedWall} appData={appData} />
         </div>
       </div>
