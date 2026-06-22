@@ -6,12 +6,13 @@ import ConfigPanel from '@/components/ConfigPanel';
 import { v4 as uuidv4 } from 'uuid';
 import dynamic from 'next/dynamic';
 
+// Dynamiczny import eliminujący błąd prerenderingu "width" na serwerze Vercel
 const CanvasArea = dynamic(() => import('@/components/CanvasArea'), { 
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-full w-full bg-zinc-900 text-orange-500">
       <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="text-xs font-bold tracking-widest text-zinc-400 uppercase">Łączenie z bazą WordPress...</p>
+      <p className="text-xs font-bold tracking-widest text-zinc-400 uppercase">Wczytywanie środowiska 3D...</p>
     </div>
   )
 });
@@ -25,10 +26,9 @@ const INITIAL_CONFIG: GarageConfig = {
 
 const CONFIG_STEPS = [{ id: 1, label: 'Dach' }, { id: 2, label: 'Wymiary' }, { id: 3, label: 'Bramy i Otoczenie' }, { id: 4, label: 'Kolory' }];
 
-// Bezpieczne dane awaryjne
+// Fallback zabezpieczający przed wejściem bezpośrednim bez parametrów
 const FALLBACK_DATA = {
-  storeUrl: "https://konfigurator.skillup-szkolenia.pl", 
-  themeColor: "#ea580c",
+  storeUrl: "https://konfigurator.skillup-szkolenia.pl", themeColor: "#ea580c",
   baseConfig: { w: 300, l: 500, h: 210, p: 5000 },
   pricing: { sqm_t: 'fixed', sqm_v: 150, door_t: 'fixed', door_v: 500, window_t: 'fixed', window_v: 300, wood_t: 'pct', wood_v: 15, gutter_t: 'pct', gutter_v: 5 },
   addons: []
@@ -41,48 +41,44 @@ export default function Home() {
   const [activeStep, setActiveStep] = useState(1);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [wpAdminUrl, setWpAdminUrl] = useState("");
-  const [toastMessage, setToastMessage] = useState("");
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const savedConfigBase64 = params.get('load_config');
 
-    // WIDOK KARTY 360 DLA ADMINA
+    const params = new URLSearchParams(window.location.search);
+    const initDataRaw = params.get('init_data');
+    const savedConfigBase64 = params.get('load_config');
+    const storeUrl = params.get('store_url');
+
+    if (storeUrl) setWpAdminUrl(`${decodeURIComponent(storeUrl).replace(/\/$/, "")}/wp-admin/admin.php?page=garage-orders`);
+
+    // ODCZYT BEZPOŚREDNIEJ PACZKI PARAMETRÓW BASE64 (PANCERNE POŁĄCZENIE!)
+    if (initDataRaw) {
+      try {
+        const decodedJson = decodeURIComponent(escape(window.atob(decodeURIComponent(initDataRaw))));
+        const payload = JSON.parse(decodedJson);
+        setAppData(payload);
+        
+        if (!savedConfigBase64) {
+          // Ustawienie wymiarów początkowych prosto z bazy danych WordPressa!
+          setConfig(prev => ({ ...prev, width: payload.baseConfig.w, length: payload.baseConfig.l, height: payload.baseConfig.h }));
+        }
+      } catch (e) {
+        console.error("Błąd dekodowania payloadu Base64. Włączam dane domyślne.", e);
+        setAppData(FALLBACK_DATA);
+      }
+    } else {
+      // Jeśli brak danych, ładujemy bezpieczny fallback
+      setAppData(FALLBACK_DATA);
+    }
+
+    // Widok 360 od strony admina
     if (savedConfigBase64) {
       try {
         setConfig(JSON.parse(decodeURIComponent(escape(window.atob(savedConfigBase64)))));
         setIsReadOnly(true);
-        const storeUrl = params.get('store_url') || process.env.NEXT_PUBLIC_WP_URL || "https://konfigurator.skillup-szkolenia.pl";
-        setWpAdminUrl(`${storeUrl.replace(/\/$/, "")}/wp-admin/admin.php?page=garage-orders`);
-        setAppData(FALLBACK_DATA); 
       } catch (e) { console.error(e); }
-      return;
     }
-
-    // POBIERANIE CENNIKA (Z MIĘKKIM LĄDOWANIEM)
-    const fetchConfig = async () => {
-      const storeUrl = params.get('store_url') || "";
-      try {
-        const res = await fetch(`/api/config?store_url=${encodeURIComponent(storeUrl)}`);
-        if (!res.ok) throw new Error("Błąd serwera");
-        
-        const data = await res.json();
-        if (data.pricing) {
-          setAppData(data);
-          setConfig(prev => ({ ...prev, width: data.baseConfig.w, length: data.baseConfig.l, height: data.baseConfig.h }));
-        } else {
-          throw new Error("Brak danych cenowych");
-        }
-      } catch (err) {
-        console.error("Błąd łączności WP, włączam tryb awaryjny:", err);
-        setAppData(FALLBACK_DATA);
-        setConfig(prev => ({ ...prev, width: FALLBACK_DATA.baseConfig.w, length: FALLBACK_DATA.baseConfig.l, height: FALLBACK_DATA.baseConfig.h }));
-        setToastMessage("Brak łączności z serwerem WordPress. Wczytano cennik domyślny.");
-      }
-    };
-
-    fetchConfig();
   }, []);
 
   const handleScroll = (e: UIEvent<HTMLDivElement>) => {
@@ -97,20 +93,28 @@ export default function Home() {
     else setActiveStep(5);
   };
 
-  // EKRAN ŁADOWANIA (Zniknie po max 1 sekundzie)
   if (!appData) return <div className="flex h-screen items-center justify-center bg-zinc-900"><div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"></div></div>;
 
   if (isReadOnly) {
     return (
       <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-zinc-50" style={{ '--theme': appData.themeColor } as React.CSSProperties}>
-        <div className="w-full md:w-[70%] relative bg-zinc-900 shadow-inner h-full">
+        <div className="w-full md:w-[70%] relative bg-zinc-900 h-full">
           <CanvasArea config={config} selectedWall={selectedWall} />
           <div className="absolute top-4 left-4 pointer-events-none z-10 bg-zinc-900/80 backdrop-blur-md p-4 rounded-2xl border border-[var(--theme)] shadow-xl">
             <h1 className="text-xl font-black text-white tracking-tight">Karta Zamówienia <span className="text-[var(--theme)]">360°</span></h1>
+            <p className="text-zinc-300 text-xs mt-1 font-medium">Model można swobodnie obracać myszką.</p>
           </div>
         </div>
         <div className="w-full md:w-[30%] h-full bg-white border-l border-zinc-200 p-6 overflow-y-auto flex flex-col justify-between">
-          <div><h2 className="text-2xl font-bold text-zinc-900 mb-6 border-b pb-3">Specyfikacja Garażu</h2></div>
+          <div>
+            <h2 className="text-2xl font-bold text-zinc-900 mb-6 border-b pb-3">Specyfikacja Garażu</h2>
+            <ul className="text-sm text-zinc-700 space-y-2">
+              <li>Szerokość: <strong>{config.width} cm</strong></li>
+              <li>Długość: <strong>{config.length} cm</strong></li>
+              <li>Wysokość: <strong>{config.height} cm</strong></li>
+              <li>Profil blachy ścian: <strong>{config.wallProfile}</strong></li>
+            </ul>
+          </div>
           <div className="pt-4 border-t">
             <a href={wpAdminUrl || "#"} className="w-full flex justify-center items-center py-4 rounded-xl font-bold bg-zinc-950 text-white hover:bg-zinc-900 transition-colors shadow-md">← Wróć do zamówień</a>
           </div>
@@ -135,7 +139,6 @@ export default function Home() {
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${step.id <= activeStep ? 'bg-[var(--theme)] text-white' : 'bg-white text-zinc-400 border border-zinc-300'}`}>{step.id < activeStep ? '✓' : step.id}</div>
               </div>
             ))}
-            <div className="flex flex-col items-center gap-1 z-10"><div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${activeStep === 5 ? 'bg-[var(--theme)] text-white' : 'bg-white text-zinc-400 border border-zinc-300'}`}>✓</div></div>
           </div>
         </div>
 
@@ -143,15 +146,6 @@ export default function Home() {
           <ConfigPanel config={config} setConfig={setConfig} selectedWall={selectedWall} setSelectedWall={setSelectedWall} appData={appData} />
         </div>
       </div>
-
-      {/* DYSKRETNY KOMUNIKAT BŁĘDU (Pływający dymek na dole) */}
-      {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900 border border-red-500/50 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 text-sm animate-bounce-in">
-          <span className="flex items-center justify-center w-6 h-6 bg-red-500 text-white rounded-full font-bold">!</span>
-          <span>{toastMessage}</span>
-          <button onClick={() => setToastMessage("")} className="ml-2 text-zinc-400 hover:text-white transition-colors">✕</button>
-        </div>
-      )}
     </main>
   );
 }
