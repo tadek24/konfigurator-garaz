@@ -14,7 +14,7 @@ interface ConfigPanelProps {
   appData: any;
 }
 
-const WOJEWODZTWA = ["Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubuskie", "Łódzkie", "Małopolskie", "Mazowieckie", "Opolskie", "Podkarpackie", "Podlaskie", "Pomorskie", "Śląskie", "Świętokrzyskie", "Warmińskie-mazurskie", "Wielkopolskie", "Zachodniopomorskie"];
+const WOJEWODZTWA = ["Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubuskie", "Łódzkie", "Małopolskie", "Mazowieckie", "Opolskie", "Podkarpackie", "Podlaskie", "Pomorskie", "Śląskie", "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"];
 
 function RoofIcon({ type }: { type: RoofType }) {
   const base = "stroke-current fill-none";
@@ -77,7 +77,7 @@ function OrderButton({ config, totalPrice, targetStoreUrl, selectedAddonsText }:
           inputImgRef.current.value = tempCanvas.toDataURL('image/jpeg', 0.7); 
           formRef.current.submit();
         }
-      } catch (err) { alert("Błąd zapisu rysunku."); }
+      } catch (err) { alert("Błąd zapisu widoku."); }
     } else { alert("Błąd 3D."); }
   };
 
@@ -85,7 +85,7 @@ function OrderButton({ config, totalPrice, targetStoreUrl, selectedAddonsText }:
     <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
       <div className="flex flex-col gap-2 mb-4">
         <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
-        <select value={region} onChange={(e) => setRegion(e.target.value)} className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2" style={{accentColor: 'var(--theme)'}} required >
+        <select value={region} onChange={(e) => setRegion(e.target.value)} className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2" style={{border: region ? '2px solid var(--theme)' : 'none'}} required >
           <option value="" disabled>Wybierz z listy...</option>
           {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
         </select>
@@ -104,7 +104,7 @@ function OrderButton({ config, totalPrice, targetStoreUrl, selectedAddonsText }:
         <input type="hidden" name="garage_dynamic_addons" value={selectedAddonsText} />
         <input type="hidden" ref={inputImgRef} name="garage_image" value="" />
         
-        <button onClick={handleOrder} disabled={!region} className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 text-white" style={{ backgroundColor: region ? 'var(--theme)' : '#3f3f46', cursor: region ? 'pointer' : 'not-allowed' }}>
+        <button onClick={handleOrder} disabled={!region} className={`w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md flex justify-center items-center gap-2 text-white`} style={{ backgroundColor: region ? 'var(--theme)' : '#3f3f46', cursor: region ? 'pointer' : 'not-allowed' }}>
           {region ? 'Kupuję i płacę' : 'Wybierz województwo'}
         </button>
       </form>
@@ -118,42 +118,41 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const pricing = appData.pricing;
   const customAddons = appData.addons || [];
 
+  // ==== NAPRAWIONY SILNIK MATEMATYCZNY ====
   const calculatedPrice = useMemo(() => {
-    let total = appData.baseConfig.p; // Pobieramy cenę bazową z WordPressa
+    // WYMUSZAMY traktowanie tego jako Liczby, a nie teksty (zapobiega to "1000"+"1000"="10001000")
+    let total = Number(appData.baseConfig.p) || 0; 
     let percentMultiplier = 1;
     
-    // RÓŻNICOWE WYLICTANIE METRÓW KWADRATOWYCH (Płacisz tylko za to, co wystaje ponad model bazowy!)
-    const baseArea = (appData.baseConfig.w / 100) * (appData.baseConfig.l / 100);
-    const currentArea = (config.width / 100) * (config.length / 100);
+    // Suwaki wymiarów -> płacisz tylko za nadwyżkę!
+    const baseArea = (Number(appData.baseConfig.w) / 100) * (Number(appData.baseConfig.l) / 100);
+    const currentArea = (Number(config.width) / 100) * (Number(config.length) / 100);
     const extraArea = Math.max(0, currentArea - baseArea); 
     
     if (extraArea > 0) {
-      if (pricing.sqm_t === 'fixed') total += (extraArea * pricing.sqm_v);
-      else percentMultiplier += (extraArea * pricing.sqm_v / 100);
+      if (pricing.sqm_t === 'fixed') total += (extraArea * Number(pricing.sqm_v));
+      else percentMultiplier += (extraArea * Number(pricing.sqm_v) / 100);
     }
 
-    // Drzwi i okna boczne doliczane od sztuki
     const doorsCount = config.elements.filter(e => e.type === 'door').length;
     const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
     
-    if (pricing.door_t === 'fixed') total += (doorsCount * pricing.door_v);
-    else percentMultiplier += (doorsCount * pricing.door_v / 100);
+    if (pricing.door_t === 'fixed') total += (doorsCount * Number(pricing.door_v));
+    else percentMultiplier += (doorsCount * Number(pricing.door_v) / 100);
 
-    if (pricing.window_t === 'fixed') total += (windowsCount * pricing.window_v);
-    else percentMultiplier += (windowsCount * pricing.window_v / 100);
+    if (pricing.window_t === 'fixed') total += (windowsCount * Number(pricing.window_v));
+    else percentMultiplier += (windowsCount * Number(pricing.window_v) / 100);
 
-    // Wykończenie premium (blacha drewnopodobna i rynny)
     const isWood = config.wallProfile === 'drewnopodobna' || config.gateProfile === 'drewnopodobna' || config.roofProfile === 'drewnopodobna' || config.doorProfile === 'drewnopodobna';
     if (isWood) {
-      if (pricing.wood_t === 'fixed') total += pricing.wood_v;
-      else percentMultiplier += (pricing.wood_v / 100);
+      if (pricing.wood_t === 'fixed') total += Number(pricing.wood_v);
+      else percentMultiplier += (Number(pricing.wood_v) / 100);
     }
     if (config.gutters) {
-      if (pricing.gutter_t === 'fixed') total += pricing.gutter_v;
-      else percentMultiplier += (pricing.gutter_v / 100);
+      if (pricing.gutter_t === 'fixed') total += Number(pricing.gutter_v);
+      else percentMultiplier += (Number(pricing.gutter_v) / 100);
     }
 
-    // Dynamiczne dodatki (Wiaty, Kotwienia) dodane graficznie w panelu WP
     let customAddonTotal = 0;
     selectedAddons.forEach(addonId => {
       const addon = customAddons.find((a: any) => a.id === addonId);
@@ -208,6 +207,23 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const removeElement = (id: string) => setConfig(prev => ({ ...prev, elements: prev.elements.filter(e => e.id !== id) }));
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
+
+  useEffect(() => {
+    if (config.roofType === 'slope-front') {
+      const maxH = config.height - 30;
+      let changed = false;
+      const newElements = config.elements.map(el => {
+        if (el.wall === 'front' && el.type === 'gate') {
+          const updated = { ...el };
+          if (updated.height > maxH) { updated.height = maxH; changed = true; }
+          if (updated.clearanceHeight && updated.clearanceHeight > maxH) { updated.clearanceHeight = maxH; changed = true; }
+          return updated;
+        }
+        return el;
+      });
+      if (changed) setConfig(prev => ({ ...prev, elements: newElements }));
+    }
+  }, [config.roofType, config.height, config.elements, setConfig]);
 
   return (
     <div className="space-y-4 pb-12">
@@ -339,7 +355,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                       const updates: Partial<GarageConfig> = { roofProfile: p.value };
                       if (p.value === 'blachodachowka' && !TILE_COLORS.map(c => c.color).includes(config.roofColor)) updates.roofColor = '#3b3b3c';
                       setConfig(prev => ({ ...prev, ...updates }));
-                    }} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.roofProfile === p.value ? 'border-[var(--theme)] bg-zinc-100 text-[var(--theme)] shadow-sm' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
+                    }} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.roofProfile === p.value ? 'border-[var(--theme)] bg-zinc-100 text-[var(--theme)]' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>
                     {p.label}
                   </button>
                 ))}
@@ -379,6 +395,31 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             <div>
               <span className="text-xs text-zinc-500 block mb-2">Kolor ścian</span>
               {config.wallProfile === 'ocynk' ? <p className="text-xs text-zinc-400 italic">Kolor ustalony automatycznie.</p> : config.wallProfile === 'drewnopodobna' ? <ColorPicker colors={WOOD_COLORS.map(c=>c.color)} value={config.wallColor} onChange={(c) => updateConfig('wallColor', c)} labels={Object.fromEntries(WOOD_COLORS.map(c => [c.color, c.label]))} /> : <ColorPicker colors={STANDARD_COLORS} value={config.wallColor} onChange={(c) => updateConfig('wallColor', c)} />}
+            </div>
+          </div>
+        </div>
+        <hr className="border-zinc-200 my-4" />
+        <div className="mb-6"><h3 className="font-semibold text-zinc-800 mb-3 text-sm">🚪 Brama Główna</h3>
+          <div className="space-y-3">
+            <div>
+              <div className="flex gap-2">
+                {([{ value: 'trapez-t7' as GateProfile, label: 'Trapez T-7' }, { value: 'drewnopodobna' as GateProfile, label: 'Drewnopodobna' }]).map(p => (
+                  <button key={p.value} onClick={() => updateConfig('gateProfile', p.value)} className={`flex-1 p-2 text-xs font-medium border rounded-lg transition-all ${config.gateProfile === p.value ? 'border-[var(--theme)] bg-zinc-100 text-[var(--theme)]' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}>{p.label}</button>
+                ))}
+              </div>
+            </div>
+            {config.gateProfile !== 'ocynk' && gates[0]?.gateType !== 'sectional' && (
+              <div className="mb-3">
+                <span className="text-xs text-zinc-500 block mb-2">Układ przetłoczeń:</span>
+                <div className="flex gap-2 bg-zinc-100 rounded-lg p-1 border">
+                  <button onClick={() => updateConfig('gateRibbing', 'vertical')} className={`flex-1 py-1 rounded text-xs ${config.gateRibbing === 'vertical' || !config.gateRibbing ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Pionowe</button>
+                  <button onClick={() => updateConfig('gateRibbing', 'horizontal')} className={`flex-1 py-1 rounded text-xs ${config.gateRibbing === 'horizontal' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>Poziome</button>
+                </div>
+              </div>
+            )}
+            <div>
+              <span className="text-xs text-zinc-500 block mb-2">Kolor bramy</span>
+              {config.gateProfile === 'drewnopodobna' ? <ColorPicker colors={WOOD_COLORS.map(c=>c.color)} value={config.gateColor} onChange={(c) => updateConfig('gateColor', c)} labels={Object.fromEntries(WOOD_COLORS.map(c => [c.color, c.label]))} /> : <ColorPicker colors={STANDARD_COLORS} value={config.gateColor} onChange={(c) => updateConfig('gateColor', c)} />}
             </div>
           </div>
         </div>
