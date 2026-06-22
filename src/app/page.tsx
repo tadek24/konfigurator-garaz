@@ -6,7 +6,6 @@ import ConfigPanel from '@/components/ConfigPanel';
 import { v4 as uuidv4 } from 'uuid';
 import dynamic from 'next/dynamic';
 
-// Dynamiczny import eliminujący błąd prerenderingu "width" na serwerze Vercel
 const CanvasArea = dynamic(() => import('@/components/CanvasArea'), { 
   ssr: false,
   loading: () => (
@@ -26,7 +25,7 @@ const INITIAL_CONFIG: GarageConfig = {
 
 const CONFIG_STEPS = [{ id: 1, label: 'Dach' }, { id: 2, label: 'Wymiary' }, { id: 3, label: 'Bramy i Otoczenie' }, { id: 4, label: 'Kolory' }];
 
-// Fallback zabezpieczający przed wejściem bezpośrednim bez parametrów
+// Fallback dla wejść bez paczki danych
 const FALLBACK_DATA = {
   storeUrl: "https://konfigurator.skillup-szkolenia.pl", themeColor: "#ea580c",
   baseConfig: { w: 300, l: 500, h: 210, p: 5000 },
@@ -41,6 +40,7 @@ export default function Home() {
   const [activeStep, setActiveStep] = useState(1);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [wpAdminUrl, setWpAdminUrl] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -52,31 +52,36 @@ export default function Home() {
 
     if (storeUrl) setWpAdminUrl(`${decodeURIComponent(storeUrl).replace(/\/$/, "")}/wp-admin/admin.php?page=garage-orders`);
 
-    // ODCZYT BEZPOŚREDNIEJ PACZKI PARAMETRÓW BASE64 (PANCERNE POŁĄCZENIE!)
+    // PANCERNY ODCZYT: Dekodowanie paczki z WP
     if (initDataRaw) {
       try {
-        const decodedJson = decodeURIComponent(escape(window.atob(decodeURIComponent(initDataRaw))));
-        const payload = JSON.parse(decodedJson);
-        setAppData(payload);
+        // Bezpieczne dekodowanie utf-8 w js
+        const base64Decoded = atob(decodeURIComponent(initDataRaw));
+        const utf8Decoded = new TextDecoder("utf-8").decode(Uint8Array.from(base64Decoded, c => c.charCodeAt(0)));
+        const payload = JSON.parse(utf8Decoded);
         
+        setAppData(payload);
         if (!savedConfigBase64) {
-          // Ustawienie wymiarów początkowych prosto z bazy danych WordPressa!
           setConfig(prev => ({ ...prev, width: payload.baseConfig.w, length: payload.baseConfig.l, height: payload.baseConfig.h }));
         }
-      } catch (e) {
-        console.error("Błąd dekodowania payloadu Base64. Włączam dane domyślne.", e);
+      } catch (e: any) {
+        console.error("Błąd dekodowania paczki:", e.message);
+        setToastMessage("Błąd zapisu struktury z WordPress. Ładuję dane domyślne.");
         setAppData(FALLBACK_DATA);
       }
-    } else {
-      // Jeśli brak danych, ładujemy bezpieczny fallback
+    } else if (!savedConfigBase64) {
+      setToastMessage("Otwarto link bezpośredni bez parametrów WordPress. Tryb podglądu włączony.");
       setAppData(FALLBACK_DATA);
     }
 
-    // Widok 360 od strony admina
+    // Tryb odczytu Karty 360
     if (savedConfigBase64) {
       try {
-        setConfig(JSON.parse(decodeURIComponent(escape(window.atob(savedConfigBase64)))));
+        const decoded = atob(decodeURIComponent(savedConfigBase64));
+        const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decoded, c => c.charCodeAt(0)));
+        setConfig(JSON.parse(utf8));
         setIsReadOnly(true);
+        if (!appData) setAppData(FALLBACK_DATA);
       } catch (e) { console.error(e); }
     }
   }, []);
@@ -102,19 +107,10 @@ export default function Home() {
           <CanvasArea config={config} selectedWall={selectedWall} />
           <div className="absolute top-4 left-4 pointer-events-none z-10 bg-zinc-900/80 backdrop-blur-md p-4 rounded-2xl border border-[var(--theme)] shadow-xl">
             <h1 className="text-xl font-black text-white tracking-tight">Karta Zamówienia <span className="text-[var(--theme)]">360°</span></h1>
-            <p className="text-zinc-300 text-xs mt-1 font-medium">Model można swobodnie obracać myszką.</p>
           </div>
         </div>
         <div className="w-full md:w-[30%] h-full bg-white border-l border-zinc-200 p-6 overflow-y-auto flex flex-col justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-zinc-900 mb-6 border-b pb-3">Specyfikacja Garażu</h2>
-            <ul className="text-sm text-zinc-700 space-y-2">
-              <li>Szerokość: <strong>{config.width} cm</strong></li>
-              <li>Długość: <strong>{config.length} cm</strong></li>
-              <li>Wysokość: <strong>{config.height} cm</strong></li>
-              <li>Profil blachy ścian: <strong>{config.wallProfile}</strong></li>
-            </ul>
-          </div>
+          <div><h2 className="text-2xl font-bold text-zinc-900 mb-6 border-b pb-3">Specyfikacja Garażu</h2></div>
           <div className="pt-4 border-t">
             <a href={wpAdminUrl || "#"} className="w-full flex justify-center items-center py-4 rounded-xl font-bold bg-zinc-950 text-white hover:bg-zinc-900 transition-colors shadow-md">← Wróć do zamówień</a>
           </div>
@@ -139,6 +135,7 @@ export default function Home() {
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${step.id <= activeStep ? 'bg-[var(--theme)] text-white' : 'bg-white text-zinc-400 border border-zinc-300'}`}>{step.id < activeStep ? '✓' : step.id}</div>
               </div>
             ))}
+            <div className="flex flex-col items-center gap-1 z-10"><div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${activeStep === 5 ? 'bg-[var(--theme)] text-white' : 'bg-white text-zinc-400 border border-zinc-300'}`}>✓</div></div>
           </div>
         </div>
 
@@ -146,6 +143,14 @@ export default function Home() {
           <ConfigPanel config={config} setConfig={setConfig} selectedWall={selectedWall} setSelectedWall={setSelectedWall} appData={appData} />
         </div>
       </div>
+
+      {toastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900 border border-orange-500/50 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 text-sm animate-bounce-in">
+          <span className="flex items-center justify-center w-6 h-6 bg-orange-500 text-white rounded-full font-bold">i</span>
+          <span>{toastMessage}</span>
+          <button onClick={() => setToastMessage("")} className="ml-2 text-zinc-400 hover:text-white transition-colors">✕</button>
+        </div>
+      )}
     </main>
   );
 }
