@@ -26,6 +26,7 @@ export interface GarageConfig {
   roofType: RoofType;
   gutters: boolean;
   elements: GarageElement[];
+  extraOptions?: string[];
   
   // NOWY SYSTEM KOLORÓW I OBRÓBEK
   applyColorToAll: boolean; // Checkbox "Zastosuj do wszystkich"

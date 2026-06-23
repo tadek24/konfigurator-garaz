@@ -1,7 +1,7 @@
 "use client";
 
 import { GarageConfig, RoofType, WallFace, GarageElement, GateType, SheetProfile } from '@/types';
-import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2 } from 'lucide-react';
+import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2, Settings } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
 import { useMemo, useState, useRef, Dispatch, SetStateAction, useEffect } from 'react';
@@ -203,6 +203,34 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   return (
     <div className="space-y-4 pb-12">
+      <Section title="Wybierz Typ Garażu" icon={<Home size={20} />}>
+        <div className="flex flex-wrap gap-2">
+          {([
+            { id: 'slope-back',  label: 'Spad w tył', symbol: '◢' },
+            { id: 'dual-slope',  label: 'Dwuspadowy', symbol: '▲' },
+            { id: 'slope-left',  label: 'Spad w lewo', symbol: '◤' },
+            { id: 'slope-right', label: 'Spad w prawo', symbol: '◥' },
+            { id: 'slope-front', label: 'Spad w przód', symbol: '◣' },
+          ] as { id: RoofType; label: string; symbol: string }[]).map(rt => {
+            const active = config.roofType === rt.id;
+            return (
+              <button
+                key={rt.id}
+                onClick={() => updateConfig('roofType', rt.id)}
+                className={`flex-1 min-w-[100px] rounded-xl border-2 p-3 flex flex-col items-center justify-center gap-2 transition-all ${
+                  active
+                    ? 'border-[var(--theme)] bg-zinc-50 shadow-sm text-[var(--theme)]'
+                    : 'border-zinc-200 bg-white hover:border-zinc-300 text-zinc-600'
+                }`}
+              >
+                <span className="text-2xl">{rt.symbol}</span>
+                <span className="text-xs font-bold text-center leading-tight">{rt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+
       <Section title="Wymiary Główne" icon={<Maximize size={20} />}>
         <div className="space-y-6">
           {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: 'Wysokość', key: 'height' as const, min: 200, max: 350, step: 5 }].map(dim => (
@@ -213,6 +241,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           ))}
         </div>
       </Section>
+
+
 
       <Section title="Parametry Bram" icon={<BoxSelect size={20} />}>
         <div className="mb-4">
@@ -242,6 +272,18 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <div className="flex justify-between text-xs text-zinc-500 mb-1"><span>Pozycja X</span><span>{gate.x} cm</span></div>
               <input type="range" min={-(config.width / 2) + gate.width/2} max={(config.width / 2) - gate.width/2} step={5} value={gate.x} onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />
             </div>
+            <div className="mt-3 pt-3 border-t border-zinc-100">
+              <button
+                onClick={() => updateElement(gate.id, { isOpen: !gate.isOpen })}
+                className={`w-full py-2 text-sm font-bold rounded-lg transition-all ${
+                  gate.isOpen
+                    ? 'bg-[var(--theme)] text-white shadow-md'
+                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                }`}
+              >
+                {gate.isOpen ? '🔓 Zamknij bramę (pogląd)' : '🔑 Otwórz bramę (pogląd)'}
+              </button>
+            </div>
           </div>
         ))}
       </Section>
@@ -270,18 +312,53 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 <button onClick={() => removeElement(el.id)} className="absolute top-3 right-3 text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
                 <h3 className="font-semibold text-zinc-800 mb-3 capitalize">{el.type === 'door' ? 'Drzwi' : 'Okno'} #{idx + 1}</h3>
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="text-xs text-zinc-500">Szerokość</label><input type="number" value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
-                    <div><label className="text-xs text-zinc-500">Wysokość</label><input type="number" value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
+                  <div className="grid grid-cols-4 gap-2 mb-2">
+                    <div><label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">Szer. (cm)</label><input type="number" value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-full border border-zinc-300 p-1.5 rounded text-sm bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none" /></div>
+                    <div><label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">Wys. (cm)</label><input type="number" value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-full border border-zinc-300 p-1.5 rounded text-sm bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none" /></div>
+                    <div><label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">Poz. X</label><input type="number" value={el.x} onChange={(e) => updateElement(el.id, { x: Number(e.target.value) })} className="w-full border border-zinc-300 p-1.5 rounded text-sm bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none" /></div>
+                    <div><label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">Poz. Y</label><input type="number" value={el.y} onChange={(e) => updateElement(el.id, { y: Number(e.target.value) })} className="w-full border border-zinc-300 p-1.5 rounded text-sm bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none" /></div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-xs text-zinc-500 mb-1"><span>Pozycja X</span><span>{el.x} cm</span></div>
-                    <input type="range" min={-((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) + el.width/2} max={((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) - el.width/2} step={5} value={el.x} onChange={(e) => updateElement(el.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />
-                  </div>
+                  {el.type === 'door' && (
+                    <div className="mt-2 pt-2 border-t border-zinc-100">
+                      <label className="text-xs text-zinc-500 block mb-1">Strona zawiasów</label>
+                      <div className="flex gap-2">
+                        <button onClick={() => updateElement(el.id, { hingeSide: 'left' })} className={`flex-1 py-1.5 text-xs font-semibold rounded ${el.hingeSide === 'left' ? 'bg-[var(--theme)] text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>Lewe</button>
+                        <button onClick={() => updateElement(el.id, { hingeSide: 'right' })} className={`flex-1 py-1.5 text-xs font-semibold rounded ${el.hingeSide === 'right' ? 'bg-[var(--theme)] text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>Prawe</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
           )}
+        </div>
+      </Section>
+
+      <Section title="Opcje Dodatkowe" icon={<Settings size={20} />}>
+        <div className="space-y-3">
+          {[
+            { id: 'gutters', label: 'Rynny' },
+            { id: 'cornerFlashings', label: 'Obróbki narożne' },
+            { id: 'roofFlashings', label: 'Obróbki dachu' },
+          ].map(opt => {
+            const isActive = config.extraOptions?.includes(opt.id);
+            return (
+              <label key={opt.id} className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white">
+                <input 
+                  type="checkbox" 
+                  checked={isActive} 
+                  onChange={(e) => {
+                    const next = e.target.checked 
+                      ? [...(config.extraOptions || []), opt.id] 
+                      : (config.extraOptions || []).filter(x => x !== opt.id);
+                    updateConfig('extraOptions' as any, next);
+                  }} 
+                  className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" 
+                />
+                <span className="text-sm font-semibold text-zinc-700">{opt.label}</span>
+              </label>
+            );
+          })}
         </div>
       </Section>
 
