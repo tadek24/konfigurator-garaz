@@ -5,7 +5,7 @@ import { GarageConfig, WallFace } from '@/types';
 import ConfigPanel from '@/components/ConfigPanel';
 import { v4 as uuidv4 } from 'uuid';
 import dynamic from 'next/dynamic';
-import { Eye } from 'lucide-react'; // Ikonka do przycisku podglądu
+import { Eye } from 'lucide-react';
 
 const CanvasArea = dynamic(() => import('@/components/CanvasArea'), { 
   ssr: false,
@@ -17,11 +17,20 @@ const CanvasArea = dynamic(() => import('@/components/CanvasArea'), {
   )
 });
 
+// NAPRAWIONE WARTOSCI POCZĄTKOWE - Vercel to przepuści!
 const INITIAL_CONFIG: GarageConfig = {
   width: 300, length: 500, height: 210,
   roofType: 'dual-slope', gutters: false,
   elements: [{ id: uuidv4(), type: 'gate', wall: 'front', x: 0, y: 0, width: 250, height: 200, clearanceHeight: 190, gateType: 'up-and-over', hingeSide: 'left' }],
-  roofColor: '#3b3b3c', roofProfile: 'trapez-t14', wallColor: '#e3e3e3', wallProfile: 'trapez-t7', gateColor: '#3b3b3c', gateProfile: 'trapez-t7', doorColor: '#3b3b3c', doorProfile: 'trapez-t7', windowColor: '#ffffff',
+  applyColorToAll: false,
+  removeFoil: false,
+  roofColor: '#3b3b3c', roofProfile: 'pionowe-t14',
+  wallColor: '#e3e3e3', wallProfile: 'pionowe-t7',
+  gateColor: '#3b3b3c', gateProfile: 'pionowe-t7',
+  doorColor: '#3b3b3c', doorProfile: 'pionowe-t7',
+  cornerFlashingColor: '#3b3b3c',
+  roofFlashingColor: '#3b3b3c',
+  windowColor: '#ffffff',
 };
 
 const CONFIG_STEPS = [{ id: 1, label: 'Dach' }, { id: 2, label: 'Wymiary' }, { id: 3, label: 'Bramy i Otoczenie' }, { id: 4, label: 'Kolory' }];
@@ -30,7 +39,7 @@ const FALLBACK_DATA = {
   storeUrl: "https://konfigurator.skillup-szkolenia.pl", themeColor: "#ea580c",
   baseConfig: { w: 300, l: 500, h: 210, p: 5000 },
   pricing: { sqm_t: 'fixed', sqm_v: 150, door_t: 'fixed', door_v: 500, window_t: 'fixed', window_v: 300, wood_t: 'pct', wood_v: 15, gutter_t: 'pct', gutter_v: 5 },
-  addons: []
+  addons: [], colors: []
 };
 
 export default function Home() {
@@ -39,9 +48,8 @@ export default function Home() {
   const [selectedWall, setSelectedWall] = useState<WallFace>('front');
   const [activeStep, setActiveStep] = useState(1);
   const [isReadOnly, setIsReadOnly] = useState(false);
-  
-  // NOWOŚĆ: Śledzimy w co kliknął admin w panelu bocznym
   const [activeDimId, setActiveDimId] = useState<string | null>(null);
+  const [wpAdminUrl, setWpAdminUrl] = useState("");
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -49,6 +57,9 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     const initDataRaw = params.get('init_data');
     const savedConfigBase64 = params.get('load_config');
+    const storeUrl = params.get('store_url');
+
+    if (storeUrl) setWpAdminUrl(`${decodeURIComponent(storeUrl).replace(/\/$/, "")}/wp-admin/admin.php?page=garage-orders`);
 
     if (initDataRaw) {
       try {
@@ -86,16 +97,11 @@ export default function Home() {
 
   if (!appData) return <div className="flex h-screen items-center justify-center bg-zinc-900"><div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"></div></div>;
 
-  // ==========================================================
-  // PROFESJONALNA KARTA ZAMÓWIENIA DLA PRODUKCJI
-  // ==========================================================
   if (isReadOnly) {
     return (
       <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-zinc-50" style={{ '--theme': appData.themeColor } as React.CSSProperties}>
         <div className="w-full md:w-[65%] relative bg-zinc-900 h-full">
-          {/* Przekazujemy activeDimId żeby model podświetlił wybrany element! */}
           <CanvasArea config={config} selectedWall={selectedWall} activeDimId={activeDimId} />
-          
           <div className="absolute top-6 left-6 pointer-events-none z-10">
             <div className="bg-zinc-900/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-zinc-800 shadow-2xl">
               <h1 className="text-2xl font-black text-white tracking-tight uppercase">Podgląd Produkcyjny <span className="text-[var(--theme)]">3D</span></h1>
@@ -110,7 +116,6 @@ export default function Home() {
           </div>
           
           <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-            {/* WYMIARY BRYŁY */}
             <div>
               <h3 className="text-xs font-black text-[var(--theme)] uppercase tracking-widest mb-4">Wymiary Główne Rzutu</h3>
               <div className="grid grid-cols-3 gap-3">
@@ -129,30 +134,22 @@ export default function Home() {
               </div>
             </div>
 
-            {/* MATERIAŁY */}
             <div>
               <h3 className="text-xs font-black text-[var(--theme)] uppercase tracking-widest mb-4">Materiały i Wykończenie</h3>
               <ul className="space-y-3">
                 <li className="flex justify-between items-center bg-white border border-zinc-200 p-3 rounded-xl shadow-sm">
                   <span className="text-sm font-bold text-zinc-600">Poszycie Ścian</span>
-                  <div className="flex items-center gap-2"><div className="w-5 h-5 rounded-full shadow-inner border border-zinc-300" style={{backgroundColor: config.wallColor}}></div> <span className="font-bold text-zinc-900">{config.wallProfile}</span></div>
+                  <div className="flex items-center gap-2"><span className="font-bold text-zinc-900">{config.wallProfile}</span></div>
                 </li>
                 <li className="flex justify-between items-center bg-white border border-zinc-200 p-3 rounded-xl shadow-sm">
                   <span className="text-sm font-bold text-zinc-600">Rodzaj Dachu</span>
-                  <div className="flex items-center gap-2"><div className="w-5 h-5 rounded-full shadow-inner border border-zinc-300" style={{backgroundColor: config.roofColor}}></div> <span className="font-bold text-zinc-900">{config.roofProfile} ({config.roofType})</span></div>
+                  <div className="flex items-center gap-2"><span className="font-bold text-zinc-900">{config.roofProfile} ({config.roofType})</span></div>
                 </li>
-                {config.gutters && (
-                  <li className="flex justify-between items-center bg-orange-50 border border-orange-200 p-3 rounded-xl shadow-sm text-orange-800">
-                    <span className="text-sm font-bold">Orynnowanie</span>
-                    <span className="font-black uppercase">Dodano</span>
-                  </li>
-                )}
               </ul>
             </div>
 
-            {/* ELEMENTY - INTERAKTYWNE Z MODELM 3D */}
             <div>
-              <h3 className="text-xs font-black text-[var(--theme)] uppercase tracking-widest mb-4">Rozkład Elementów (Otwory)</h3>
+              <h3 className="text-xs font-black text-[var(--theme)] uppercase tracking-widest mb-4">Rozkład Elementów</h3>
               {config.elements.length === 0 ? <p className="text-sm text-zinc-400 italic">Brak dodatkowych otworów.</p> : (
                 <div className="space-y-3">
                   {config.elements.map((el) => {
@@ -160,10 +157,7 @@ export default function Home() {
                     return (
                       <button 
                         key={el.id} 
-                        onClick={() => {
-                          setSelectedWall(el.wall); // Obraca model na właściwą ścianę
-                          setActiveDimId(isActive ? null : el.id); // Włącza linie wymiarowania
-                        }}
+                        onClick={() => { setSelectedWall(el.wall); setActiveDimId(isActive ? null : el.id); }}
                         className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center justify-between group ${isActive ? 'bg-[var(--theme)] border-[var(--theme)] shadow-lg scale-[1.02]' : 'bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'}`}
                       >
                         <div>
@@ -173,11 +167,7 @@ export default function Home() {
                           <div className={`text-sm font-medium mt-1 ${isActive ? 'text-white/80' : 'text-zinc-500'}`}>
                             Ściana: <span className="font-bold uppercase">{el.wall}</span>
                           </div>
-                          {el.type !== 'window' && el.type !== 'pvc-window' && (
-                            <div className={`text-xs mt-1 ${isActive ? 'text-white/80' : 'text-zinc-400'}`}>Klamka z: {el.hingeSide === 'left' ? 'Prawej' : 'Lewej'}</div>
-                          )}
                         </div>
-                        
                         <div className="flex flex-col items-end gap-2">
                           <span className={`px-3 py-1 rounded-lg text-sm font-black ${isActive ? 'bg-white text-[var(--theme)]' : 'bg-zinc-100 text-zinc-900'}`}>
                             {el.width} x {el.height}
@@ -191,12 +181,14 @@ export default function Home() {
               )}
             </div>
           </div>
+          <div className="pt-4 border-t">
+            <a href={wpAdminUrl || "#"} className="w-full flex justify-center items-center py-4 font-bold bg-zinc-950 text-white hover:bg-zinc-900 transition-colors">← Wróć do zamówień</a>
+          </div>
         </div>
       </main>
     );
   }
 
-  // WIDOK KONFIGURATORA DLA KLIENTA (Bez zmian)
   return (
     <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-zinc-50" style={{ '--theme': appData.themeColor } as React.CSSProperties}>
       <div className="w-full h-[40vh] md:h-full md:w-[60%] relative bg-zinc-900 shadow-inner">
@@ -204,19 +196,6 @@ export default function Home() {
       </div>
 
       <div className="w-full h-[60vh] md:h-full md:w-[40%] flex flex-col bg-white border-l border-zinc-200 shadow-[-4px_0_25px_rgba(0,0,0,0.05)] relative z-10">
-        <div className="bg-white border-b border-zinc-200 px-6 py-4 shrink-0 z-10 shadow-sm">
-          <div className="flex justify-between items-center relative">
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-zinc-200 -z-20"></div>
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-[var(--theme)] transition-all duration-500 -z-10" style={{ width: `${((Math.min(activeStep, 5) - 1) / 4) * 100}%` }}></div>
-            {CONFIG_STEPS.map((step) => (
-              <div key={step.id} className="flex flex-col items-center gap-1 z-10">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${step.id <= activeStep ? 'bg-[var(--theme)] text-white' : 'bg-white text-zinc-400 border border-zinc-300'}`}>{step.id < activeStep ? '✓' : step.id}</div>
-              </div>
-            ))}
-            <div className="flex flex-col items-center gap-1 z-10"><div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${activeStep === 5 ? 'bg-[var(--theme)] text-white' : 'bg-white text-zinc-400 border border-zinc-300'}`}>✓</div></div>
-          </div>
-        </div>
-
         <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar scroll-smooth" onScroll={handleScroll}>
           <ConfigPanel config={config} setConfig={setConfig} selectedWall={selectedWall} setSelectedWall={setSelectedWall} appData={appData} />
         </div>

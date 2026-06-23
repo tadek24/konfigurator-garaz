@@ -1,7 +1,7 @@
 "use client";
 
 import { GarageConfig, RoofType, WallFace, GarageElement, GateType, SheetProfile } from '@/types';
-import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2, Check } from 'lucide-react';
+import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2 } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
 import { useMemo, useState, useRef, Dispatch, SetStateAction, useEffect } from 'react';
@@ -56,6 +56,15 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       else percentMultiplier += (extraArea * Number(pricing.sqm_v) / 100);
     }
 
+    const doorsCount = config.elements.filter(e => e.type === 'door').length;
+    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
+    
+    if (pricing.door_t === 'fixed') total += (doorsCount * Number(pricing.door_v));
+    else percentMultiplier += (doorsCount * Number(pricing.door_v) / 100);
+
+    if (pricing.window_t === 'fixed') total += (windowsCount * Number(pricing.window_v));
+    else percentMultiplier += (windowsCount * Number(pricing.window_v) / 100);
+
     let customAddonTotal = 0;
     selectedAddons.forEach(addonId => {
       const addon = customAddons.find((a: any) => a.id === addonId);
@@ -101,6 +110,44 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     }
     setActiveColorEdit(null);
   };
+
+  const addElement = (type: GarageElement['type'], wall: WallFace = selectedWall) => {
+    let width = 100, height = 200;
+    if (type === 'gate') { width = 250; height = 200; }
+    if (type === 'window' || type === 'pvc-window') { width = 100; height = 60; }
+    if (type === 'skylight') { width = 100; height = 30; }
+
+    const wallWidth = wall === 'front' || wall === 'back' ? config.width : config.length;
+    const newElement: GarageElement = { id: uuidv4(), type, wall, x: 0, y: type === 'window' || type === 'pvc-window' ? 120 : (type === 'skylight' ? config.height - 40 : 0), width, height, gateType: type === 'gate' ? 'up-and-over' : undefined, clearanceHeight: type === 'gate' ? 190 : undefined, hingeSide: 'left' };
+
+    const validPos = findValidPosition(newElement, config.elements, wallWidth, config.height);
+    if (validPos) {
+      newElement.x = validPos.x; newElement.y = validPos.y;
+      setConfig(prev => ({ ...prev, elements: [...prev.elements, newElement] }));
+      setSelectedWall(wall);
+    } else { alert("Brak miejsca na tej ścianie!"); }
+  };
+
+  const updateElement = (id: string, updates: Partial<GarageElement>) => {
+    setConfig(prev => {
+      const newElements = prev.elements.map(el => {
+        if (el.id === id) {
+          const updated = { ...el, ...updates };
+          const wallWidth = updated.wall === 'front' || updated.wall === 'back' ? prev.width : prev.length;
+          const pos = findValidPosition(updated, prev.elements, wallWidth, prev.height);
+          if (!pos && (updates.x !== undefined || updates.y !== undefined || updates.width !== undefined || updates.height !== undefined)) return el; 
+          if (pos && (updates.x !== undefined || updates.y !== undefined)) { if (pos.x !== updated.x || pos.y !== updated.y) return el; }
+          return updated;
+        }
+        return el;
+      });
+      return { ...prev, elements: newElements };
+    });
+  };
+
+  const removeElement = (id: string) => setConfig(prev => ({ ...prev, elements: prev.elements.filter(e => e.id !== id) }));
+  const gates = config.elements.filter(e => e.type === 'gate');
+  const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
   const ColorSelectionModal = () => (
     <div className="mt-4 p-4 bg-white border-2 border-zinc-200 rounded-xl shadow-inner">
@@ -164,6 +211,77 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <input type="range" min={dim.min} max={dim.max} step={dim.step} value={config[dim.key]} onChange={(e) => updateConfig(dim.key, Number(e.target.value))} className="w-full" style={{accentColor: 'var(--theme)'}} />
             </div>
           ))}
+        </div>
+      </Section>
+
+      <Section title="Parametry Bram" icon={<BoxSelect size={20} />}>
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-sm font-medium text-zinc-700">Ilość bram (przód)</span>
+            <div className="flex gap-2 bg-white rounded-lg border border-zinc-200 p-1">
+              <button onClick={() => { if (gates.length === 2) removeElement(gates[1].id); if (gates.length === 0) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 1 ? 'bg-zinc-100 font-bold text-[var(--theme)]' : ''}`}>1</button>
+              <button onClick={() => { if (gates.length < 2) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 2 ? 'bg-zinc-100 font-bold text-[var(--theme)]' : ''}`}>2</button>
+            </div>
+          </div>
+        </div>
+        {config.roofType === 'slope-front' && <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">⚠️ Dach spadowy w przód — max. wysokość bramy ograniczona.</div>}
+
+        {gates.map((gate, i) => (
+          <div key={gate.id} className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-3">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold text-zinc-800">Brama #{i+1}</h3>
+              <select value={gate.gateType} onChange={(e) => { setSelectedWall('front'); updateElement(gate.id, { gateType: e.target.value as GateType, isOpen: false }); }} className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50">
+                <option value="up-and-over">Uchylna</option><option value="swing">Dwuskrzydłowa</option><option value="sectional">Segmentowa</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mb-3">
+              <div><label className="text-xs text-zinc-500">Szerokość</label><input type="number" value={gate.width} onChange={(e) => updateElement(gate.id, { width: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
+              <div><label className="text-xs text-zinc-500">Wysokość</label><input type="number" value={gate.height} max={maxGateHeight} onChange={(e) => updateElement(gate.id, { height: Math.min(Number(e.target.value), maxGateHeight) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs text-zinc-500 mb-1"><span>Pozycja X</span><span>{gate.x} cm</span></div>
+              <input type="range" min={-(config.width / 2) + gate.width/2} max={(config.width / 2) - gate.width/2} step={5} value={gate.x} onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />
+            </div>
+          </div>
+        ))}
+      </Section>
+
+      <Section title="Drzwi i Okna" icon={<Layers size={20} />}>
+        <div className="mb-4">
+          <label className="text-sm font-medium text-zinc-700 block mb-2">Edytuj ścianę:</label>
+          <div className="flex gap-2">
+            {(['front', 'back', 'left', 'right'] as WallFace[]).map(wall => (
+              <button key={wall} onClick={() => setSelectedWall(wall)} className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg transition-colors ${selectedWall === wall ? 'bg-zinc-800 text-white' : 'bg-white border border-zinc-300 text-zinc-600 hover:bg-zinc-100'}`}>
+                {wall === 'front' ? 'Przód' : wall === 'back' ? 'Tył' : wall === 'left' ? 'Lewa' : 'Prawa'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+          <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Drzwi</button>
+          <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Okno</button>
+        </div>
+        <div className="space-y-3">
+          {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (
+            <div className="text-sm text-zinc-400 text-center py-4 bg-white border border-dashed rounded-lg">Brak elementów na tej ścianie.</div>
+          ) : (
+            config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').map((el, idx) => (
+              <div key={el.id} className="bg-white p-3 rounded-xl border border-zinc-200 shadow-sm relative group">
+                <button onClick={() => removeElement(el.id)} className="absolute top-3 right-3 text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                <h3 className="font-semibold text-zinc-800 mb-3 capitalize">{el.type === 'door' ? 'Drzwi' : 'Okno'} #{idx + 1}</h3>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className="text-xs text-zinc-500">Szerokość</label><input type="number" value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
+                    <div><label className="text-xs text-zinc-500">Wysokość</label><input type="number" value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs text-zinc-500 mb-1"><span>Pozycja X</span><span>{el.x} cm</span></div>
+                    <input type="range" min={-((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) + el.width/2} max={((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) - el.width/2} step={5} value={el.x} onChange={(e) => updateElement(el.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </Section>
 
@@ -243,7 +361,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <div className="p-4 border-t border-zinc-800 bg-zinc-950">
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" checked={config.applyColorToAll} onChange={(e) => updateConfig('applyColorToAll', e.target.checked)} className="w-5 h-5 rounded border-zinc-700 bg-zinc-800 text-[var(--theme)]" />
-              <span className="text-sm font-medium text-zinc-300">Użyj koloru dla wszystkich elementów garażu</span>
+              <span className="text-sm font-medium text-zinc-300">Użyj koloru dla wszystkich elementów</span>
             </label>
           </div>
         </div>
