@@ -67,7 +67,6 @@ function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, w
   const { hex: gateHex, isWood, textureUrl } = resolveColor(config.gateColor, colors);
   const isHorizontal = config.gateProfile.startsWith('poziome') || el.gateType === 'sectional';
   
-  // Użycie dynamicznej tekstury z nowego menedżera
   const baseWoodColor = loadedTextures[textureUrl] || woodColor;
   const baseWoodColorHoriz = loadedTextures[`${textureUrl}_horiz`] || woodColorHoriz;
 
@@ -203,8 +202,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const [trapezTex] = useTexture(['/textures/trapez.jpg']);
   const [woodNormal] = useTexture(['/textures/drewno-normal.jpg']);
 
-  // 1. ZAAWANSOWANY MENEDŻER TEKSTUR DREWNA
-  // Pobieramy wszystkie aktywne tekstury, aby każda (ściana, dach, drzwi) miała swój obrazek
+  // 1. ZAAWANSOWANY MENEDŻER TEKSTUR Z OBSŁUGĄ CORS
   const [loadedTextures, setLoadedTextures] = useState<Record<string, THREE.Texture>>({});
 
   useEffect(() => {
@@ -216,6 +214,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     ].filter(url => url !== '')));
 
     const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous'); // ROZWIĄZANIE PROBLEMU Z CORS
 
     urlsToLoad.forEach(url => {
       if (!loadedTextures[url]) {
@@ -234,6 +233,8 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
             [url]: tex,
             [`${url}_horiz`]: horizTex
           }));
+        }, undefined, (err) => {
+          console.error("Blokada CORS na serwerze WordPress. Obrazek:", url);
         });
       }
     });
@@ -243,7 +244,6 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const showCornerFlashings = config.extraOptions?.includes('cornerFlashings');
   const showRoofFlashings = config.extraOptions?.includes('roofFlashings');
 
-  // Generowanie tekstur domyślnych
   const { trapezTexHoriz, woodColorHoriz, woodNormalHoriz } = useMemo(() => {
     trapezTex.wrapS = trapezTex.wrapT = THREE.RepeatWrapping;
     const profileRepeat = config.wallProfile.includes('t7') ? 6 : config.wallProfile.includes('t17') ? 2 : 4; 
@@ -262,12 +262,11 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
 
     return {
       trapezTexHoriz: rotateTexture(trapezTex),
-      woodColorHoriz: rotateTexture(trapezTex), // Fallback, jeśli nie ma drewna
+      woodColorHoriz: rotateTexture(trapezTex), 
       woodNormalHoriz: rotateTexture(woodNormal),
     };
   }, [trapezTex, woodNormal, config.wallProfile]);
 
-  // Logika spadów (NAPRAWIONO rozpoznawanie dwuspadowego dachu)
   let hFL = h, hFR = h, hBL = h, hBR = h;
   let frontCenter: number | null = null;
   let backCenter:  number | null = null;
@@ -286,10 +285,10 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   else if (isLeft) { hFR = h + slopeH; hBR = h + slopeH; } 
   else if (isRight) { hFL = h + slopeH; hBL = h + slopeH; }
 
-  // Geometria ścian
+  // 2. NAPRAWA GEOMETRII (USUNIĘCIE "ZĄBKA" NA NAROŻNIKACH)
   const createFBShape = (leftH: number, rightH: number, centerH: number | null) => {
     const shape = new THREE.Shape();
-    const halfW = w / 2; 
+    const halfW = w / 2 - t; // Węższa ściana idealnie zrównana z krawędzią boczną
     shape.moveTo(-halfW, 0); 
     shape.lineTo( halfW, 0);
     shape.lineTo( halfW, rightH);
@@ -403,13 +402,14 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
 
     const baseRoofWood = loadedTextures[roofTexUrl] || trapezTex;
 
+    // 3. DACH OBNIŻONY O 3 CM, ABY SZTYWNO LEŻAŁ NA ŚCIANACH
     if (isDual) {
       const roofShape = new THREE.Shape();
       roofShape.moveTo(-rW / 2, 0); roofShape.lineTo(0, slopeH); roofShape.lineTo( rW / 2, 0);
       roofShape.lineTo( rW / 2, t); roofShape.lineTo(0, slopeH + t); roofShape.lineTo(-rW / 2, t);
       roofShape.closePath();
       return (
-        <group position={[0, h, -rL / 2]}>
+        <group position={[0, h - 0.03, -rL / 2]}>
           <mesh castShadow receiveShadow>
             <extrudeGeometry args={[roofShape, { depth: rL, bevelEnabled: false }]} />
             <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} />
@@ -456,7 +456,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
 
     return (
       <group>
-        <mesh position={[xOffset, h + slopeH / 2 + t / 2, zOffset]} rotation={[roofRotX, 0, roofRotZ]} castShadow receiveShadow>
+        <mesh position={[xOffset, h + slopeH / 2 - 0.02, zOffset]} rotation={[roofRotX, 0, roofRotZ]} castShadow receiveShadow>
           <boxGeometry args={[rW, t, rL]} />
           <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} />
           <meshStandardMaterial attach="material-1" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} />
@@ -516,16 +516,16 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
       
       {showCornerFlashings && (
         <>
-          {renderCornerTrim(-w/2, l/2, hFL)}
-          {renderCornerTrim(w/2, l/2, hFR)}
-          {renderCornerTrim(-w/2, -l/2, hBL)}
-          {renderCornerTrim(w/2, -l/2, hBR)}
+          {renderCornerTrim(-w/2 + t/2, l/2 - t/2, hFL)}
+          {renderCornerTrim(w/2 - t/2, l/2 - t/2, hFR)}
+          {renderCornerTrim(-w/2 + t/2, -l/2 + t/2, hBL)}
+          {renderCornerTrim(w/2 - t/2, -l/2 + t/2, hBR)}
         </>
       )}
 
-      {/* Wszystkie ściany otrzymały wymuszone side={THREE.DoubleSide} oraz zniwelowano luki w pozycji */}
+      {/* Poprawiona matematyka ścian - zniwelowano 'ząbek' na narożnikach */}
       <group>
-        <mesh position={[0, 0, l / 2]} castShadow receiveShadow>
+        <mesh position={[0, 0, l / 2 - t]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[frontShape, wallExtrude]} /></Base>
             {getSubtractions('front')}
@@ -543,7 +543,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
         </mesh>
         {renderElements('back', [0, 0, -l / 2 + t/2], Math.PI)}
 
-        <mesh position={[-w / 2 + t, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
+        <mesh position={[-w / 2, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[leftSideShape, wallExtrude]} /></Base>
             {getSubtractions('left', true, true)}
@@ -552,7 +552,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
         </mesh>
         {renderElements('left', [-w / 2 + t/2, 0, l / 2], Math.PI / 2, true, true)}
 
-        <mesh position={[w / 2, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
+        <mesh position={[w / 2 - t, 0, l / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
           <Geometry>
             <Base><extrudeGeometry args={[rightSideShape, wallExtrude]} /></Base>
             {getSubtractions('right', true, false)}

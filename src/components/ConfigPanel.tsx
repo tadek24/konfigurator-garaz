@@ -29,17 +29,15 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
-// Komponent z ładnymi ikonami dachów SVG
+// Eleganckie wektorowe ikony dachów
 const RoofIcon = ({ type }: { type: RoofType }) => {
-  const stroke = "currentColor";
-  const fill = "currentColor";
   return (
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mb-1 opacity-80">
-      {type === 'slope-back' && <polygon points="2,20 22,20 22,6 2,14" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
-      {type === 'dual-slope' && <polygon points="2,20 22,20 22,12 12,4 2,12" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
-      {type === 'slope-left' && <polygon points="2,20 22,20 22,14 2,4" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
-      {type === 'slope-right' && <polygon points="2,20 22,20 22,4 2,14" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
-      {type === 'slope-front' && <polygon points="2,20 22,20 22,14 2,6" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 mb-1 opacity-90 transition-transform hover:scale-110">
+      {type === 'slope-back' && <polygon points="3,18 21,18 21,10 3,14" />}
+      {type === 'dual-slope' && <polygon points="2,18 22,18 22,12 12,5 2,12" />}
+      {type === 'slope-left' && <polygon points="3,18 21,18 21,15 3,7" />}
+      {type === 'slope-right' && <polygon points="3,18 21,18 21,7 3,15" />}
+      {type === 'slope-front' && <polygon points="3,18 21,18 21,14 3,10" />}
     </svg>
   );
 };
@@ -349,12 +347,12 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       <Section title="Opcje Dodatkowe" icon={<Settings size={20} />}>
         <div className="space-y-3">
           {customAddons.length === 0 ? (
-            <p className="text-sm text-zinc-500 italic">Brak dodatkowych opcji skonfigurowanych w WordPress.</p>
+            <p className="text-sm text-zinc-500 italic text-center py-4">Brak dodatkowych opcji skonfigurowanych w WordPress.</p>
           ) : (
             customAddons.map((opt: any) => {
               const isActive = (config.extraOptions || []).includes(opt.id);
               return (
-                <label key={opt.id} className="flex items-center justify-between cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white">
+                <label key={opt.id} className="flex items-center justify-between cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm">
                   <div className="flex items-center gap-3">
                     <input 
                       type="checkbox" 
@@ -369,7 +367,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                     />
                     <span className="text-sm font-semibold text-zinc-700">{opt.label}</span>
                   </div>
-                  <span className="text-xs font-bold text-zinc-400">
+                  <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
                     {opt.type === 'pct' ? `+${opt.price}%` : `+${opt.price} zł`}
                   </span>
                 </label>
