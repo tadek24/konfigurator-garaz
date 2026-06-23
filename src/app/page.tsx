@@ -101,7 +101,7 @@ export default function Home() {
     return (
       <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-zinc-50" style={{ '--theme': appData.themeColor } as React.CSSProperties}>
         <div className="w-full md:w-[65%] relative bg-zinc-900 h-full">
-          <CanvasArea config={config} selectedWall={selectedWall} activeDimId={activeDimId} />
+          <CanvasArea config={config} selectedWall={selectedWall} activeDimId={activeDimId} colors={appData?.colors || []} />
           <div className="absolute top-6 left-6 pointer-events-none z-10">
             <div className="bg-zinc-900/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-zinc-800 shadow-2xl">
               <h1 className="text-2xl font-black text-white tracking-tight uppercase">Podgląd Produkcyjny <span className="text-[var(--theme)]">3D</span></h1>
@@ -192,7 +192,7 @@ export default function Home() {
   return (
     <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-zinc-50" style={{ '--theme': appData.themeColor } as React.CSSProperties}>
       <div className="w-full h-[40vh] md:h-full md:w-[60%] relative bg-zinc-900 shadow-inner">
-        <CanvasArea config={config} selectedWall={selectedWall} />
+        <CanvasArea config={config} selectedWall={selectedWall} colors={appData?.colors || []} />
       </div>
 
       <div className="w-full h-[60vh] md:h-full md:w-[40%] flex flex-col bg-white border-l border-zinc-200 shadow-[-4px_0_25px_rgba(0,0,0,0.05)] relative z-10">

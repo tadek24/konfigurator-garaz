@@ -214,6 +214,33 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
+      <Section title="Rodzaj Dachu" icon={<Home size={20} />}>
+        <div className="space-y-2">
+          {([
+            { id: 'dual-slope',  label: 'Dwuspadowy',                      symbol: '▲' },
+            { id: 'slope-front', label: 'Jednospadowy — przód niższy',       symbol: '◣' },
+            { id: 'slope-back',  label: 'Jednospadowy — tył niższy',         symbol: '◢' },
+            { id: 'slope-left',  label: 'Jednospadowy — lewo niższe',        symbol: '◤' },
+            { id: 'slope-right', label: 'Jednospadowy — prawo niższe',       symbol: '◥' },
+          ] as { id: RoofType; label: string; symbol: string }[]).map(rt => (
+            <button
+              key={rt.id}
+              onClick={() => updateConfig('roofType', rt.id)}
+              className={`w-full p-3 rounded-xl border-2 flex items-center gap-3 transition-all text-left ${
+                config.roofType === rt.id
+                  ? 'border-[var(--theme)] bg-zinc-50'
+                  : 'border-zinc-200 hover:border-zinc-300 bg-white'
+              }`}
+            >
+              <span className="text-xl w-7 text-center shrink-0">{rt.symbol}</span>
+              <span className={`text-sm font-semibold ${
+                config.roofType === rt.id ? 'text-[var(--theme)]' : 'text-zinc-700'
+              }`}>{rt.label}</span>
+            </button>
+          ))}
+        </div>
+      </Section>
+
       <Section title="Parametry Bram" icon={<BoxSelect size={20} />}>
         <div className="mb-4">
           <div className="flex justify-between items-center mb-3">
@@ -241,6 +268,18 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             <div>
               <div className="flex justify-between text-xs text-zinc-500 mb-1"><span>Pozycja X</span><span>{gate.x} cm</span></div>
               <input type="range" min={-(config.width / 2) + gate.width/2} max={(config.width / 2) - gate.width/2} step={5} value={gate.x} onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />
+            </div>
+            <div className="mt-3 pt-3 border-t border-zinc-100">
+              <button
+                onClick={() => updateElement(gate.id, { isOpen: !gate.isOpen })}
+                className={`w-full py-2 text-sm font-bold rounded-lg transition-all ${
+                  gate.isOpen
+                    ? 'bg-[var(--theme)] text-white shadow-md'
+                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                }`}
+              >
+                {gate.isOpen ? '🔓 Zamknij bramę (pogląd)' : '🔑 Otwórz bramę (pogląd)'}
+              </button>
             </div>
           </div>
         ))}

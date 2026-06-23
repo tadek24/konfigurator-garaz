@@ -9,12 +9,32 @@ import { Environment, ContactShadows, useTexture } from '@react-three/drei';
 
 interface GarageModelProps {
   config: GarageConfig;
+  colors?: any[];
+}
+
+// ── Helper: tłumaczy ID koloru WP na dane materiału Three.js ──────────────────
+// Zwraca hex (poprawny kolor CSS) i flagę isWood do doboru tekstury.
+function resolveColor(colorId: string, colors: any[]): { hex: string; isWood: boolean } {
+  // Wartości domyślne (INITIAL_CONFIG) zaczynają się od '#' – są już HEX-em
+  if (colorId && colorId.startsWith('#')) {
+    return { hex: colorId, isWood: false };
+  }
+  // Szukamy koloru po ID w tablicy przekazanej z WordPress
+  const found = colors.find((c: any) => c.id === colorId);
+  if (!found) {
+    // Fallback gdy baza nie załadowana lub ID nieznane w tej sesji
+    return { hex: '#d4d4d4', isWood: false };
+  }
+  return {
+    hex: found.hex || '#d4d4d4',
+    isWood: found.type === 'drewno',
+  };
 }
 
 // ── Brama Segmentowa ───────────────────────
 const PANEL_COUNT = 5;
 
-function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, woodColorHoriz, woodNormalHoriz, config }: { 
+function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, woodColorHoriz, woodNormalHoriz, config, colors }: { 
   el: GarageElement; 
   woodColor: THREE.Texture; 
   woodNormal: THREE.Texture; 
@@ -23,6 +43,7 @@ function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, w
   woodColorHoriz: THREE.Texture;
   woodNormalHoriz: THREE.Texture;
   config: GarageConfig;
+  colors: any[];
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const progress = useRef(el.isOpen ? 1 : 0);
@@ -60,7 +81,8 @@ function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, w
     }
   });
 
-  const isWood = config.gateProfile.includes('drewno');
+  // Tłumaczenie ID koloru bramy na HEX i flagę drewna (na podstawie typu koloru z WP)
+  const { hex: gateHex, isWood } = resolveColor(config.gateColor, colors);
   // Brama segmentowa domyślnie wygląda najlepiej z poziomymi przetłoczeniami, 
   // ale respektujemy też ustawienie z konfiguratora jeśli istnieje.
   const isHorizontal = config.gateProfile.startsWith('poziome') || el.gateType === 'sectional';
@@ -78,7 +100,7 @@ function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, w
               map={activeColorMap}
               normalMap={activeNormalMap}
               normalScale={isWood ? new THREE.Vector2(1.5, 1.5) : undefined}
-              color={isWood ? '#ffffff' : (config.gateProfile.includes('ocynk') ? '#d4d4d4' : config.gateColor)}
+              color={isWood ? '#ffffff' : gateHex}
               roughness={isWood ? 0.7 : 0.4}
               metalness={isWood ? 0.0 : 0.6}
               envMapIntensity={1.5}
@@ -91,7 +113,7 @@ function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, w
 }
 
 // ── Brama Uchylna i Dwuskrzydłowa ───────────────────────────────
-function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, woodColorHoriz, woodNormalHoriz, config }: { 
+function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, woodColorHoriz, woodNormalHoriz, config, colors }: { 
   el: GarageElement; 
   woodColor: THREE.Texture; 
   woodNormal: THREE.Texture; 
@@ -100,6 +122,7 @@ function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, wo
   woodColorHoriz: THREE.Texture;
   woodNormalHoriz: THREE.Texture;
   config: GarageConfig;
+  colors: any[];
 }) {
   const ref = useRef<THREE.Group>(null);
   const elW = el.width * 0.01;
@@ -125,10 +148,11 @@ function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, wo
   });
 
   if (el.gateType === 'sectional') {
-    return <SectionalGate el={el} woodColor={woodColor} woodNormal={woodNormal} trapezTex={trapezTex} trapezTexHoriz={trapezTexHoriz} woodColorHoriz={woodColorHoriz} woodNormalHoriz={woodNormalHoriz} config={config} />;
+    return <SectionalGate el={el} woodColor={woodColor} woodNormal={woodNormal} trapezTex={trapezTex} trapezTexHoriz={trapezTexHoriz} woodColorHoriz={woodColorHoriz} woodNormalHoriz={woodNormalHoriz} config={config} colors={colors} />;
   }
 
-  const isWood = config.gateProfile.includes('drewno');
+  // Tłumaczenie ID koloru bramy na HEX i flagę drewna
+  const { hex: gateHex, isWood } = resolveColor(config.gateColor, colors);
   const isHorizontal = config.gateProfile.startsWith('poziome');
   
   const activeColorMap = isWood ? (isHorizontal ? woodColorHoriz : woodColor) : (isHorizontal ? trapezTexHoriz : trapezTex);
@@ -139,7 +163,7 @@ function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, wo
       map={activeColorMap}
       normalMap={activeNormalMap}
       normalScale={isWood ? new THREE.Vector2(1.5, 1.5) : undefined}
-      color={isWood ? '#ffffff' : (config.gateProfile.includes('ocynk') ? '#d4d4d4' : config.gateColor)}
+      color={isWood ? '#ffffff' : gateHex}
       roughness={isWood ? 0.7 : 0.4}
       metalness={isWood ? 0.0 : 0.6}
       envMapIntensity={1.5}
@@ -194,7 +218,7 @@ function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, wo
 }
 
 // ── Główny model Garażu ──────────────────────────────────────────────────────
-export default function GarageModel({ config }: GarageModelProps) {
+export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const w = config.width * 0.01;
   const l = config.length * 0.01;
   const h = config.height * 0.01;
@@ -315,9 +339,10 @@ export default function GarageModel({ config }: GarageModelProps) {
               </group>
             );
           } else if (el.type === 'gate') {
-            return <AnimatedGate key={el.id} el={{ ...el, x: xPos * 100 }} woodColor={woodColor} woodNormal={woodNormal} trapezTex={trapezTex} trapezTexHoriz={trapezTexHoriz} woodColorHoriz={woodColorHoriz} woodNormalHoriz={woodNormalHoriz} config={config} />;
+            return <AnimatedGate key={el.id} el={{ ...el, x: xPos * 100 }} woodColor={woodColor} woodNormal={woodNormal} trapezTex={trapezTex} trapezTexHoriz={trapezTexHoriz} woodColorHoriz={woodColorHoriz} woodNormalHoriz={woodNormalHoriz} config={config} colors={colors} />;
           } else {
-            const isDoorWood = config.doorProfile.includes('drewno');
+            // Tłumaczenie ID koloru drzwi na HEX i flagę drewna
+            const { hex: doorHex, isWood: isDoorWood } = resolveColor(config.doorColor, colors);
             const isHorizontal = config.doorProfile.startsWith('poziome');
             
             const activeColorMap = isDoorWood ? (isHorizontal ? woodColorHoriz : woodColor) : (isHorizontal ? trapezTexHoriz : trapezTex);
@@ -334,7 +359,7 @@ export default function GarageModel({ config }: GarageModelProps) {
                     map={activeColorMap}
                     normalMap={activeNormalMap}
                     normalScale={isDoorWood ? new THREE.Vector2(1.5, 1.5) : undefined}
-                    color={isDoorWood ? '#ffffff' : (config.doorProfile.includes('ocynk') ? '#d4d4d4' : config.doorColor)}
+                    color={isDoorWood ? '#ffffff' : doorHex}
                     roughness={isDoorWood ? 0.7 : 0.4}
                     metalness={isDoorWood ? 0.0 : 0.6}
                     envMapIntensity={1.5}
@@ -357,8 +382,9 @@ export default function GarageModel({ config }: GarageModelProps) {
     const rL = l + 0.4; 
     const rW = w + 0.4; 
 
-    const isRoofWood = config.roofProfile.includes('drewno');
-    const roofFasciaColor = config.roofProfile.includes('ocynk') ? '#d4d4d4' : config.roofColor;
+    // Tłumaczenie ID koloru dachu na HEX i flagę drewna
+    const { hex: roofHex, isWood: isRoofWood } = resolveColor(config.roofColor, colors);
+    const roofFasciaColor = roofHex;
 
     if (isDual) {
       const roofShape = new THREE.Shape();
@@ -437,11 +463,12 @@ export default function GarageModel({ config }: GarageModelProps) {
     );
   };
 
-  const isWallWood = config.wallProfile.includes('drewno');
+  // Tłumaczenie ID koloru ścian na HEX i flagę drewna
+  const { hex: wallHex, isWood: isWallWood } = resolveColor(config.wallColor, colors);
   const isWallHorizontal = config.wallProfile.startsWith('poziome');
   const activeWallColorMap = isWallWood ? (isWallHorizontal ? woodColorHoriz : woodColor) : (isWallHorizontal ? trapezTexHoriz : trapezTex);
   const activeWallNormalMap = isWallWood ? (isWallHorizontal ? woodNormalHoriz : woodNormal) : undefined;
-  const wallBaseColor = config.wallProfile.includes('ocynk') ? '#d4d4d4' : config.wallColor;
+  const wallBaseColor = wallHex;
 
   // Słupki narożnikowe maskujące ewentualne cięcia
   const renderCornerTrim = (xPos: number, zPos: number, hTrim: number) => {

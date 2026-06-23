@@ -11,6 +11,7 @@ interface CanvasAreaProps {
   config: GarageConfig;
   selectedWall: WallFace;
   activeDimId?: string | null;
+  colors?: any[];
 }
 
 // 1. SILNIK KAMERY
@@ -123,7 +124,7 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
 }
 
 // 4. GŁÓWNE PŁÓTNO
-export default function CanvasArea({ config, selectedWall, activeDimId }: CanvasAreaProps) {
+export default function CanvasArea({ config, selectedWall, activeDimId, colors = [] }: CanvasAreaProps) {
   return (
     <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [5, 3, 7], fov: 50 }} shadows className="w-full h-full">
       <ambientLight intensity={0.6} />
@@ -131,7 +132,7 @@ export default function CanvasArea({ config, selectedWall, activeDimId }: Canvas
       <directionalLight position={[-10, 10, -10]} intensity={0.5} />
 
       <Suspense fallback={null}>
-        <GarageModel config={config} />
+        <GarageModel config={config} colors={colors} />
         
         {/* Renderowanie nakładki CAD po kliknięciu elementu */}
         {activeDimId && <DimensionsOverlay config={config} activeId={activeDimId} />}
