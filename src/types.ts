@@ -1,68 +1,50 @@
-export type RoofType =
-  | 'dual-slope'
-  | 'slope-front'
-  | 'slope-back'
-  | 'slope-left'
-  | 'slope-right';
-
+export type RoofType = 'dual-slope' | 'slope-front' | 'slope-back' | 'slope-left' | 'slope-right';
 export type WallFace = 'front' | 'back' | 'left' | 'right';
-export type ElementType = 'gate' | 'door' | 'window' | 'pvc-window' | 'skylight';
+export type GateType = 'up-and-over' | 'swing' | 'sectional';
 
-// Profiles per surface
-export type RoofProfile = 'trapez-t14' | 'rabek' | 'blachodachowka';
-export type WallProfile = 'trapez-t7' | 'ocynk' | 'drewnopodobna';
-export type GateProfile = 'trapez-t7' | 'drewnopodobna';
-export type DoorProfile = 'trapez-t7' | 'drewnopodobna';
-
-export type GateType = 'swing' | 'up-and-over' | 'sectional';
+// NOWE PROFILE BLACHY (T7, T14, T17 w pionie i poziomie)
+export type SheetProfile = 'pionowe-t7' | 'poziome-t7' | 'pionowe-t14' | 'poziome-t14' | 'pionowe-t17' | 'poziome-t17';
 
 export interface GarageElement {
   id: string;
-  type: ElementType;
+  type: 'gate' | 'door' | 'window' | 'pvc-window' | 'skylight';
   wall: WallFace;
-  x: number; // Center X position on the wall (0 is center of wall) in cm
-  y: number; // Bottom Y position from the ground in cm
-  width: number; // in cm
-  height: number; // in cm
-  // Gate specifics
-  gateType?: GateType;
-  clearanceHeight?: number; // for gates
-  isOpen?: boolean; // gate open/close state
-  paneCount?: number; // for windows
-
-  // ── DODANE: Strona zawiasów dla drzwi i bram ──
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isOpen?: boolean;
   hingeSide?: 'left' | 'right';
+  gateType?: GateType;
+  clearanceHeight?: number;
 }
 
 export interface GarageConfig {
   width: number;
   length: number;
   height: number;
-  roofType: string;
+  roofType: RoofType;
   gutters: boolean;
   elements: GarageElement[];
-
-  // ── Nowe, wymagane pola dla kolorów i struktur ──
+  
+  // NOWY SYSTEM KOLORÓW I OBRÓBEK
+  applyColorToAll: boolean; // Checkbox "Zastosuj do wszystkich"
+  removeFoil: boolean; // Ściągnięcie folii
+  
+  wallProfile: SheetProfile;
+  wallColor: string; // Zapisuje ID koloru z bazy WP
+  
+  roofProfile: SheetProfile;
   roofColor: string;
-  roofProfile: string;
-
-  wallColor: string;
-  wallProfile: string;
-
+  
+  gateProfile: SheetProfile;
   gateColor: string;
-  gateProfile: string;
-
+  
+  doorProfile: SheetProfile;
   doorColor: string;
-  doorProfile: string;
-
+  
+  cornerFlashingColor: string; // Obróbki narożne
+  roofFlashingColor: string;   // Obróbki dachu
+  
   windowColor: string;
-
-  // ── DODANE: Kierunek przetłoczeń blachy ──
-  wallRibbing?: 'vertical' | 'horizontal';
-  gateRibbing?: 'vertical' | 'horizontal';
-  doorRibbing?: 'vertical' | 'horizontal';
 }
-
-// Legacy compatibility aliases - keep these so old references don't break
-export type TextureFinish = 'trapezowa' | 'drewnopodobna' | 'rabek' | 'blachodachowka' | 'ocynk';
-export type CorrugationPattern = 'vertical-t7' | 'horizontal-t7' | 'vertical-t14' | 'horizontal-t14';
