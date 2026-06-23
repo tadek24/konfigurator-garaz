@@ -4,7 +4,7 @@ import { GarageConfig, RoofType, WallFace, GarageElement, GateType, SheetProfile
 import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2, Settings } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
-import { useMemo, useState, useRef, Dispatch, SetStateAction, useEffect } from 'react';
+import { useMemo, useState, Dispatch, SetStateAction } from 'react';
 
 interface ConfigPanelProps {
   config: GarageConfig;
@@ -29,8 +29,22 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
+// Komponent z ładnymi ikonami dachów SVG
+const RoofIcon = ({ type }: { type: RoofType }) => {
+  const stroke = "currentColor";
+  const fill = "currentColor";
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mb-1 opacity-80">
+      {type === 'slope-back' && <polygon points="2,20 22,20 22,6 2,14" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
+      {type === 'dual-slope' && <polygon points="2,20 22,20 22,12 12,4 2,12" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
+      {type === 'slope-left' && <polygon points="2,20 22,20 22,14 2,4" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
+      {type === 'slope-right' && <polygon points="2,20 22,20 22,4 2,14" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
+      {type === 'slope-front' && <polygon points="2,20 22,20 22,14 2,6" fill={fill} opacity="0.2" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />}
+    </svg>
+  );
+};
+
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData }: ConfigPanelProps) {
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [activeColorEdit, setActiveColorEdit] = useState<string | null>(null);
   
   const pricing = appData.pricing || {};
@@ -66,7 +80,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     else percentMultiplier += (windowsCount * Number(pricing.window_v) / 100);
 
     let customAddonTotal = 0;
-    selectedAddons.forEach(addonId => {
+    (config.extraOptions || []).forEach(addonId => {
       const addon = customAddons.find((a: any) => a.id === addonId);
       if (addon) {
         if (addon.type === 'fixed') customAddonTotal += Number(addon.price);
@@ -82,7 +96,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     });
 
     return Math.round((total * percentMultiplier) + customAddonTotal);
-  }, [config, pricing, selectedAddons, customAddons, appData, dbColors]);
+  }, [config, pricing, customAddons, appData, dbColors]);
 
   const updateConfig = <K extends keyof GarageConfig>(key: K, value: GarageConfig[K]) => {
     setConfig(prev => {
@@ -204,26 +218,26 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   return (
     <div className="space-y-4 pb-12">
       <Section title="Wybierz Typ Garażu" icon={<Home size={20} />}>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-row flex-wrap gap-2">
           {([
-            { id: 'slope-back',  label: 'Spad w tył', symbol: '◢' },
-            { id: 'dual-slope',  label: 'Dwuspadowy', symbol: '▲' },
-            { id: 'slope-left',  label: 'Spad w lewo', symbol: '◤' },
-            { id: 'slope-right', label: 'Spad w prawo', symbol: '◥' },
-            { id: 'slope-front', label: 'Spad w przód', symbol: '◣' },
-          ] as { id: RoofType; label: string; symbol: string }[]).map(rt => {
+            { id: 'slope-back',  label: 'Spad w tył' },
+            { id: 'dual-slope',  label: 'Dwuspadowy' },
+            { id: 'slope-left',  label: 'Spad w lewo' },
+            { id: 'slope-right', label: 'Spad w prawo' },
+            { id: 'slope-front', label: 'Spad w przód' },
+          ] as { id: RoofType; label: string; }[]).map(rt => {
             const active = config.roofType === rt.id;
             return (
               <button
                 key={rt.id}
                 onClick={() => updateConfig('roofType', rt.id)}
-                className={`flex-1 min-w-[100px] rounded-xl border-2 p-3 flex flex-col items-center justify-center gap-2 transition-all ${
+                className={`flex-1 min-w-[30%] sm:min-w-[100px] rounded-xl border-2 p-3 flex flex-col items-center justify-center gap-1 transition-all ${
                   active
                     ? 'border-[var(--theme)] bg-zinc-50 shadow-sm text-[var(--theme)]'
                     : 'border-zinc-200 bg-white hover:border-zinc-300 text-zinc-600'
                 }`}
               >
-                <span className="text-2xl">{rt.symbol}</span>
+                <RoofIcon type={rt.id} />
                 <span className="text-xs font-bold text-center leading-tight">{rt.label}</span>
               </button>
             );
@@ -241,8 +255,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           ))}
         </div>
       </Section>
-
-
 
       <Section title="Parametry Bram" icon={<BoxSelect size={20} />}>
         <div className="mb-4">
@@ -281,7 +293,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                 }`}
               >
-                {gate.isOpen ? '🔓 Zamknij bramę (pogląd)' : '🔑 Otwórz bramę (pogląd)'}
+                {gate.isOpen ? '🔓 Zamknij bramę' : '🔑 Otwórz bramę'}
               </button>
             </div>
           </div>
@@ -336,29 +348,34 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
       <Section title="Opcje Dodatkowe" icon={<Settings size={20} />}>
         <div className="space-y-3">
-          {[
-            { id: 'gutters', label: 'Rynny' },
-            { id: 'cornerFlashings', label: 'Obróbki narożne' },
-            { id: 'roofFlashings', label: 'Obróbki dachu' },
-          ].map(opt => {
-            const isActive = config.extraOptions?.includes(opt.id);
-            return (
-              <label key={opt.id} className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white">
-                <input 
-                  type="checkbox" 
-                  checked={isActive} 
-                  onChange={(e) => {
-                    const next = e.target.checked 
-                      ? [...(config.extraOptions || []), opt.id] 
-                      : (config.extraOptions || []).filter(x => x !== opt.id);
-                    updateConfig('extraOptions' as any, next);
-                  }} 
-                  className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" 
-                />
-                <span className="text-sm font-semibold text-zinc-700">{opt.label}</span>
-              </label>
-            );
-          })}
+          {customAddons.length === 0 ? (
+            <p className="text-sm text-zinc-500 italic">Brak dodatkowych opcji skonfigurowanych w WordPress.</p>
+          ) : (
+            customAddons.map((opt: any) => {
+              const isActive = (config.extraOptions || []).includes(opt.id);
+              return (
+                <label key={opt.id} className="flex items-center justify-between cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white">
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="checkbox" 
+                      checked={isActive} 
+                      onChange={(e) => {
+                        const next = e.target.checked 
+                          ? [...(config.extraOptions || []), opt.id] 
+                          : (config.extraOptions || []).filter(x => x !== opt.id);
+                        updateConfig('extraOptions' as any, next);
+                      }} 
+                      className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" 
+                    />
+                    <span className="text-sm font-semibold text-zinc-700">{opt.label}</span>
+                  </div>
+                  <span className="text-xs font-bold text-zinc-400">
+                    {opt.type === 'pct' ? `+${opt.price}%` : `+${opt.price} zł`}
+                  </span>
+                </label>
+              );
+            })
+          )}
         </div>
       </Section>
 
