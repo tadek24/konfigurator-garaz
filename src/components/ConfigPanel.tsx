@@ -214,30 +214,72 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
-      <Section title="Rodzaj Dachu" icon={<Home size={20} />}>
-        <div className="space-y-2">
-          {([
-            { id: 'dual-slope',  label: 'Dwuspadowy',                      symbol: '▲' },
-            { id: 'slope-front', label: 'Jednospadowy — przód niższy',       symbol: '◣' },
-            { id: 'slope-back',  label: 'Jednospadowy — tył niższy',         symbol: '◢' },
-            { id: 'slope-left',  label: 'Jednospadowy — lewo niższe',        symbol: '◤' },
-            { id: 'slope-right', label: 'Jednospadowy — prawo niższe',       symbol: '◥' },
-          ] as { id: RoofType; label: string; symbol: string }[]).map(rt => (
-            <button
-              key={rt.id}
-              onClick={() => updateConfig('roofType', rt.id)}
-              className={`w-full p-3 rounded-xl border-2 flex items-center gap-3 transition-all text-left ${
-                config.roofType === rt.id
-                  ? 'border-[var(--theme)] bg-zinc-50'
-                  : 'border-zinc-200 hover:border-zinc-300 bg-white'
-              }`}
-            >
-              <span className="text-xl w-7 text-center shrink-0">{rt.symbol}</span>
-              <span className={`text-sm font-semibold ${
-                config.roofType === rt.id ? 'text-[var(--theme)]' : 'text-zinc-700'
-              }`}>{rt.label}</span>
-            </button>
-          ))}
+      <Section title="Wybierz Typ Garażu" icon={<Home size={20} />}>
+        {/* Siatka wizualna typów dachu – por. załączony screenshot konfiguratora */}
+        <div className="overflow-x-auto -mx-1 pb-2">
+          <div className="flex gap-3 px-1" style={{ minWidth: 'max-content' }}>
+            {([
+              { id: 'slope-back',  label: 'Spad w tył'   },
+              { id: 'dual-slope',  label: 'Dwuspadowy'   },
+              { id: 'slope-left',  label: 'Spad w lewo'  },
+              { id: 'slope-right', label: 'Spad w prawo' },
+              { id: 'slope-front', label: 'Spad w przód' },
+            ] as { id: RoofType; label: string }[]).map(rt => {
+              const active = config.roofType === rt.id;
+              const roofFill    = active ? 'var(--theme, #ea580c)' : '#78909c';
+              const roofFillAlt = active ? 'var(--theme, #ea580c)' : '#546e7a';
+              return (
+                <button
+                  key={rt.id}
+                  onClick={() => updateConfig('roofType', rt.id)}
+                  className={`flex-none w-[108px] rounded-2xl border-2 p-2 flex flex-col items-center gap-1.5 transition-all ${
+                    active
+                      ? 'border-[var(--theme)] bg-white shadow-lg'
+                      : 'border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm'
+                  }`}
+                >
+                  {/* Miniatura SVG garażu z wybranym profilem dachu */}
+                  <div className="w-full aspect-square rounded-xl overflow-hidden bg-zinc-100 flex items-center justify-center p-1.5">
+                    <svg viewBox="0 0 90 75" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                      {/* ściana frontowa */}
+                      <polygon points="8,70 52,70 52,42 8,42" fill="#b0bec5"/>
+                      {/* ściana boczna */}
+                      <polygon points="52,70 74,58 74,30 52,42" fill="#8d9ea8"/>
+                      {/* brama */}
+                      <rect x="18" y="52" width="22" height="18" rx="1" fill="#37474f"/>
+                      {/* Profil dachu – zmienia się per typ */}
+                      {rt.id === 'slope-back' && (
+                        <polygon points="8,42 52,42 74,30 30,30" fill={roofFill}/>
+                      )}
+                      {rt.id === 'slope-front' && (
+                        <polygon points="8,42 52,42 74,14 30,14" fill={roofFill}/>
+                      )}
+                      {rt.id === 'dual-slope' && (
+                        <>
+                          <polygon points="8,42 30,24 52,42" fill={roofFill}/>
+                          <polygon points="52,42 30,24 52,24 74,30" fill={roofFillAlt}/>
+                          <line x1="30" y1="24" x2="52" y2="24" stroke="#eceff1" strokeWidth="1.5"/>
+                        </>
+                      )}
+                      {rt.id === 'slope-left' && (
+                        <polygon points="8,48 52,36 74,24 30,36" fill={roofFill}/>
+                      )}
+                      {rt.id === 'slope-right' && (
+                        <polygon points="8,36 52,48 74,36 30,24" fill={roofFill}/>
+                      )}
+                      {/* Linia okapu (wspólna dla jednospadowych) */}
+                      {rt.id !== 'dual-slope' && (
+                        <line x1="8" y1="42" x2="52" y2="42" stroke="#546e7a" strokeWidth="1.5"/>
+                      )}
+                    </svg>
+                  </div>
+                  <span className={`text-[11px] font-bold text-center leading-tight ${
+                    active ? 'text-[var(--theme)]' : 'text-zinc-600'
+                  }`}>{rt.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </Section>
 

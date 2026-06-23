@@ -14,20 +14,22 @@ interface GarageModelProps {
 
 // ── Helper: tłumaczy ID koloru WP na dane materiału Three.js ──────────────────
 // Zwraca hex (poprawny kolor CSS) i flagę isWood do doboru tekstury.
-function resolveColor(colorId: string, colors: any[]): { hex: string; isWood: boolean } {
+function resolveColor(colorId: string, colors: any[]): { hex: string; isWood: boolean; textureUrl: string } {
   // Wartości domyślne (INITIAL_CONFIG) zaczynają się od '#' – są już HEX-em
   if (colorId && colorId.startsWith('#')) {
-    return { hex: colorId, isWood: false };
+    return { hex: colorId, isWood: false, textureUrl: '' };
   }
   // Szukamy koloru po ID w tablicy przekazanej z WordPress
   const found = colors.find((c: any) => c.id === colorId);
   if (!found) {
     // Fallback gdy baza nie załadowana lub ID nieznane w tej sesji
-    return { hex: '#d4d4d4', isWood: false };
+    return { hex: '#d4d4d4', isWood: false, textureUrl: '' };
   }
   return {
     hex: found.hex || '#d4d4d4',
     isWood: found.type === 'drewno',
+    // URL tekstury z WP (dla kolorów drewnopodobnych zawiera ścieżkę do pliku JPG)
+    textureUrl: found.texture || '',
   };
 }
 
@@ -138,12 +140,14 @@ function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, wo
 
     if (el.gateType === 'up-and-over') {
       const pivot = ref.current.children[0];
-      if (pivot) pivot.rotation.x = phase * (Math.PI / 2); 
+      // Obrót na zewnątrz: uj. obrót osi X wysuwa dół panelu do przodu (w kierunku widza)
+      if (pivot) pivot.rotation.x = -phase * (Math.PI / 2); 
     } else if (el.gateType === 'swing') {
       const leftDoor  = ref.current.children[0];
       const rightDoor = ref.current.children[1];
-      if (leftDoor)  leftDoor.rotation.y  =  phase * (Math.PI / 2);
-      if (rightDoor) rightDoor.rotation.y = -phase * (Math.PI / 2);
+      // Skrzydła otwierają się na zewnątrz garażu (odwrócone znaki rotacji)
+      if (leftDoor)  leftDoor.rotation.y  = -phase * (Math.PI / 2);
+      if (rightDoor) rightDoor.rotation.y =  phase * (Math.PI / 2);
     }
   });
 
@@ -225,16 +229,46 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const t = 0.05;     
   const slopeH = 0.4; 
 
-  const [trapezTex, woodColor, woodNormal] = useTexture([
-    '/textures/trapez.jpg',
-    '/textures/drewno-color.jpg',
-    '/textures/drewno-normal.jpg'
-  ]);
+  // Tekstura przetłoczeń trapezowych – metalowa blacha falista (ładowana raz, repeat per profil)
+  const [trapezTex] = useTexture(['/textures/trapez.jpg']);
+
+  // Tekstury drewnopodobne – ładowane DYNAMICZNIE z URL z WordPress.
+  // Gdy użytkownik wybierze kolor z grupy 'drewno', pole texture w colors[].texture
+  // zawiera bezpośredni URL do pliku JPG. Fallback na statyczny plik gdy URL niedostępny.
+  const { woodColor, woodNormal } = useMemo(() => {
+    // Szukamy aktywnego koloru drewnopodobnego w tablicy colors przekazanej z WP
+    const drewnoColorEntry = colors.find((c: any) =>
+      c.type === 'drewno' &&
+      c.texture &&
+      [config.wallColor, config.gateColor, config.doorColor, config.roofColor].includes(c.id)
+    );
+    // Gdy WP poda URL do tekstury drewna, używamy go; w przeciwnym razie statyczny fallback
+    const woodColorUrl = drewnoColorEntry?.texture || '/textures/drewno-color.jpg';
+
+    const loader = new THREE.TextureLoader();
+
+    // Tekstura koloru (diffuse/albedo) – może być URL z WP
+    const colorTex = loader.load(woodColorUrl);
+    colorTex.wrapS = colorTex.wrapT = THREE.RepeatWrapping;
+    colorTex.repeat.set(2, 2);
+
+    // Normal map zawsze z pliku lokalnego (WP nie wysyła osobnego normal map)
+    const normalTex = loader.load('/textures/drewno-normal.jpg');
+    normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
+    normalTex.repeat.set(2, 2);
+
+    return { woodColor: colorTex, woodNormal: normalTex };
+  }, [colors, config.wallColor, config.gateColor, config.doorColor, config.roofColor]);
 
   // Generowanie poziomych tekstur w locie (żeby paski leciały na boki)
   const { trapezTexHoriz, woodColorHoriz, woodNormalHoriz } = useMemo(() => {
+    // Repeat przetłoczeń zależny od wybranego profilu:
+    // T7 = 6 (gęste, wąskie żebra), T14 = 4 (standard), T17 = 2 (szerokie rzadkie)
     trapezTex.wrapS = trapezTex.wrapT = THREE.RepeatWrapping;
-    trapezTex.repeat.set(4, 4);
+    const profileRepeat = config.wallProfile.includes('t7')  ? 6
+                        : config.wallProfile.includes('t17') ? 2
+                        : 4; // t14 = wartość domyślna
+    trapezTex.repeat.set(profileRepeat, profileRepeat);
 
     woodColor.wrapS = woodColor.wrapT = THREE.RepeatWrapping;
     woodNormal.wrapS = woodNormal.wrapT = THREE.RepeatWrapping;
@@ -254,7 +288,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
       woodColorHoriz: rotateTexture(woodColor),
       woodNormalHoriz: rotateTexture(woodNormal),
     };
-  }, [trapezTex, woodColor, woodNormal]);
+  }, [trapezTex, woodColor, woodNormal, config.wallProfile]);
 
   let hFL = h, hFR = h, hBL = h, hBR = h;
   let frontCenter: number | null = null;
