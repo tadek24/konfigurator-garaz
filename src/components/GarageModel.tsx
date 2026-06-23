@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, ReactNode } from 'react';
+import { useMemo, useRef, ReactNode, useState, useEffect } from 'react';
 import { GarageConfig, WallFace, GarageElement } from '@/types';
 import * as THREE from 'three';
 import { Geometry, Base, Subtraction } from '@react-three/csg';
@@ -231,11 +231,11 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
 
   // Tekstura przetłoczeń trapezowych – metalowa blacha falista (ładowana raz, repeat per profil)
   const [trapezTex] = useTexture(['/textures/trapez.jpg']);
+  const [woodNormal] = useTexture(['/textures/drewno-normal.jpg']);
 
-  // Tekstury drewnopodobne – ładowane DYNAMICZNIE z URL z WordPress.
-  // Gdy użytkownik wybierze kolor z grupy 'drewno', pole texture w colors[].texture
-  // zawiera bezpośredni URL do pliku JPG. Fallback na statyczny plik gdy URL niedostępny.
-  const { woodColor, woodNormal } = useMemo(() => {
+  const [dynamicWoodColor, setDynamicWoodColor] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
     // Szukamy aktywnego koloru drewnopodobnego w tablicy colors przekazanej z WP
     const drewnoColorEntry = colors.find((c: any) =>
       c.type === 'drewno' &&
@@ -246,19 +246,15 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     const woodColorUrl = drewnoColorEntry?.texture || '/textures/drewno-color.jpg';
 
     const loader = new THREE.TextureLoader();
-
-    // Tekstura koloru (diffuse/albedo) – może być URL z WP
-    const colorTex = loader.load(woodColorUrl);
-    colorTex.wrapS = colorTex.wrapT = THREE.RepeatWrapping;
-    colorTex.repeat.set(2, 2);
-
-    // Normal map zawsze z pliku lokalnego (WP nie wysyła osobnego normal map)
-    const normalTex = loader.load('/textures/drewno-normal.jpg');
-    normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
-    normalTex.repeat.set(2, 2);
-
-    return { woodColor: colorTex, woodNormal: normalTex };
+    loader.load(woodColorUrl, (tex) => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.repeat.set(2, 2);
+      setDynamicWoodColor(tex);
+    });
   }, [colors, config.wallColor, config.gateColor, config.doorColor, config.roofColor]);
+
+  const woodColor = dynamicWoodColor || trapezTex;
 
   // Generowanie poziomych tekstur w locie (żeby paski leciały na boki)
   const { trapezTexHoriz, woodColorHoriz, woodNormalHoriz } = useMemo(() => {
@@ -270,9 +266,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
                         : 4; // t14 = wartość domyślna
     trapezTex.repeat.set(profileRepeat, profileRepeat);
 
-    woodColor.wrapS = woodColor.wrapT = THREE.RepeatWrapping;
     woodNormal.wrapS = woodNormal.wrapT = THREE.RepeatWrapping;
-    woodColor.repeat.set(2, 2);
     woodNormal.repeat.set(2, 2);
 
     const rotateTexture = (tex: THREE.Texture) => {
@@ -285,10 +279,10 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
 
     return {
       trapezTexHoriz: rotateTexture(trapezTex),
-      woodColorHoriz: rotateTexture(woodColor),
+      woodColorHoriz: dynamicWoodColor ? rotateTexture(dynamicWoodColor) : rotateTexture(trapezTex),
       woodNormalHoriz: rotateTexture(woodNormal),
     };
-  }, [trapezTex, woodColor, woodNormal, config.wallProfile]);
+  }, [trapezTex, dynamicWoodColor, woodNormal, config.wallProfile]);
 
   let hFL = h, hFR = h, hBL = h, hBR = h;
   let frontCenter: number | null = null;
@@ -360,7 +354,8 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
           if (isSide) xPos = isLeft ? (l / 2 - el.x * 0.01) : (l / 2 + el.x * 0.01);
 
           if (el.type === 'window' || el.type === 'pvc-window' || el.type === 'skylight') {
-            const fc = config.windowColor || '#333';
+            const { hex: windowHex } = resolveColor(config.windowColor, colors);
+            const fc = windowHex && windowHex !== '#d4d4d4' ? windowHex : '#333';
             return (
               <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
                 <mesh castShadow receiveShadow>
@@ -384,6 +379,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
             
             const isLeftHinged = el.hingeSide === 'left';
             const handleXOffset = isLeftHinged ? (elW / 2 - 0.1) : -(elW / 2 - 0.1);
+            const hingeXOffset = isLeftHinged ? -(elW / 2 - 0.02) : (elW / 2 - 0.02);
 
             return (
               <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
@@ -403,6 +399,8 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
                   <mesh><sphereGeometry args={[0.028, 16, 16]} /><meshStandardMaterial color="#333" roughness={0.5} metalness={0.8} /></mesh>
                   <mesh position={[0, -0.05, 0]}><cylinderGeometry args={[0.012, 0.012, 0.1, 8]} /><meshStandardMaterial color="#333" roughness={0.5} /></mesh>
                 </group>
+                <mesh position={[hingeXOffset, elH / 3, t / 2 + 0.01]}><boxGeometry args={[0.02, 0.08, 0.02]} /><meshStandardMaterial color="#333" /></mesh>
+                <mesh position={[hingeXOffset, -elH / 3, t / 2 + 0.01]}><boxGeometry args={[0.02, 0.08, 0.02]} /><meshStandardMaterial color="#333" /></mesh>
               </group>
             );
           }

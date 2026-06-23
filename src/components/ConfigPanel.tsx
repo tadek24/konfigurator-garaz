@@ -203,17 +203,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   return (
     <div className="space-y-4 pb-12">
-      <Section title="Wymiary Główne" icon={<Maximize size={20} />}>
-        <div className="space-y-6">
-          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: 'Wysokość', key: 'height' as const, min: 200, max: 350, step: 5 }].map(dim => (
-            <div key={dim.key}>
-              <div className="flex justify-between mb-2 text-sm font-semibold text-zinc-700"><label>{dim.label}</label><span className="bg-white px-2 py-1 rounded border text-[var(--theme)] font-bold">{config[dim.key]} cm</span></div>
-              <input type="range" min={dim.min} max={dim.max} step={dim.step} value={config[dim.key]} onChange={(e) => updateConfig(dim.key, Number(e.target.value))} className="w-full" style={{accentColor: 'var(--theme)'}} />
-            </div>
-          ))}
-        </div>
-      </Section>
-
       <Section title="Wybierz Typ Garażu" icon={<Home size={20} />}>
         {/* Siatka wizualna typów dachu – por. załączony screenshot konfiguratora */}
         <div className="overflow-x-auto -mx-1 pb-2">
@@ -283,6 +272,19 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
+      <Section title="Wymiary Główne" icon={<Maximize size={20} />}>
+        <div className="space-y-6">
+          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: 'Wysokość', key: 'height' as const, min: 200, max: 350, step: 5 }].map(dim => (
+            <div key={dim.key}>
+              <div className="flex justify-between mb-2 text-sm font-semibold text-zinc-700"><label>{dim.label}</label><span className="bg-white px-2 py-1 rounded border text-[var(--theme)] font-bold">{config[dim.key]} cm</span></div>
+              <input type="range" min={dim.min} max={dim.max} step={dim.step} value={config[dim.key]} onChange={(e) => updateConfig(dim.key, Number(e.target.value))} className="w-full" style={{accentColor: 'var(--theme)'}} />
+            </div>
+          ))}
+        </div>
+      </Section>
+
+
+
       <Section title="Parametry Bram" icon={<BoxSelect size={20} />}>
         <div className="mb-4">
           <div className="flex justify-between items-center mb-3">
@@ -351,14 +353,21 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 <button onClick={() => removeElement(el.id)} className="absolute top-3 right-3 text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
                 <h3 className="font-semibold text-zinc-800 mb-3 capitalize">{el.type === 'door' ? 'Drzwi' : 'Okno'} #{idx + 1}</h3>
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="text-xs text-zinc-500">Szerokość</label><input type="number" value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
-                    <div><label className="text-xs text-zinc-500">Wysokość</label><input type="number" value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-full border p-1 rounded text-sm mt-1" /></div>
+                  <div className="grid grid-cols-4 gap-2 mb-2">
+                    <div><label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">Szer. (cm)</label><input type="number" value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-full border border-zinc-300 p-1.5 rounded text-sm bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none" /></div>
+                    <div><label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">Wys. (cm)</label><input type="number" value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-full border border-zinc-300 p-1.5 rounded text-sm bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none" /></div>
+                    <div><label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">Poz. X</label><input type="number" value={el.x} onChange={(e) => updateElement(el.id, { x: Number(e.target.value) })} className="w-full border border-zinc-300 p-1.5 rounded text-sm bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none" /></div>
+                    <div><label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">Poz. Y</label><input type="number" value={el.y} onChange={(e) => updateElement(el.id, { y: Number(e.target.value) })} className="w-full border border-zinc-300 p-1.5 rounded text-sm bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none" /></div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-xs text-zinc-500 mb-1"><span>Pozycja X</span><span>{el.x} cm</span></div>
-                    <input type="range" min={-((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) + el.width/2} max={((selectedWall === 'front' || selectedWall === 'back' ? config.width : config.length) / 2) - el.width/2} step={5} value={el.x} onChange={(e) => updateElement(el.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />
-                  </div>
+                  {el.type === 'door' && (
+                    <div className="mt-2 pt-2 border-t border-zinc-100">
+                      <label className="text-xs text-zinc-500 block mb-1">Strona zawiasów</label>
+                      <div className="flex gap-2">
+                        <button onClick={() => updateElement(el.id, { hingeSide: 'left' })} className={`flex-1 py-1.5 text-xs font-semibold rounded ${el.hingeSide === 'left' ? 'bg-[var(--theme)] text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>Lewe</button>
+                        <button onClick={() => updateElement(el.id, { hingeSide: 'right' })} className={`flex-1 py-1.5 text-xs font-semibold rounded ${el.hingeSide === 'right' ? 'bg-[var(--theme)] text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>Prawe</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
