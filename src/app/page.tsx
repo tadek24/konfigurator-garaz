@@ -17,7 +17,6 @@ const CanvasArea = dynamic(() => import('@/components/CanvasArea'), {
   )
 });
 
-// NAPRAWIONE WARTOSCI POCZĄTKOWE - Vercel to przepuści!
 const INITIAL_CONFIG: GarageConfig = {
   width: 300, length: 500, height: 210,
   roofType: 'dual-slope', gutters: false,
@@ -33,11 +32,9 @@ const INITIAL_CONFIG: GarageConfig = {
   windowColor: '#ffffff',
 };
 
-const CONFIG_STEPS = [{ id: 1, label: 'Dach' }, { id: 2, label: 'Wymiary' }, { id: 3, label: 'Bramy i Otoczenie' }, { id: 4, label: 'Kolory' }];
-
 const FALLBACK_DATA = {
   storeUrl: "https://konfigurator.skillup-szkolenia.pl", themeColor: "#ea580c",
-  baseConfig: { w: 300, l: 500, h: 210, p: 5000 },
+  baseConfig: { w: 300, l: 500, h: 210, p: 1000 },
   pricing: { sqm_t: 'fixed', sqm_v: 150, door_t: 'fixed', door_v: 500, window_t: 'fixed', window_v: 300, wood_t: 'pct', wood_v: 15, gutter_t: 'pct', gutter_v: 5 },
   addons: [], colors: []
 };
@@ -68,7 +65,8 @@ export default function Home() {
         setAppData(payload);
         if (!savedConfigBase64) setConfig(prev => ({ ...prev, width: payload.baseConfig.w, length: payload.baseConfig.l, height: payload.baseConfig.h }));
       } catch (e: any) { setAppData(FALLBACK_DATA); }
-    } else if (!savedConfigBase64) {
+    } else {
+      // Zapobiega awarii BIM Viewera, gdy nie ma init_data z ustawieniami WP
       setAppData(FALLBACK_DATA);
     }
 
@@ -78,7 +76,6 @@ export default function Home() {
         const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decoded, c => c.charCodeAt(0)));
         setConfig(JSON.parse(utf8));
         setIsReadOnly(true);
-        if (!appData) setAppData({ themeColor: "#ea580c" });
       } catch (e) { console.error(e); }
     }
   }, []);
@@ -162,7 +159,7 @@ export default function Home() {
                       >
                         <div>
                           <div className={`font-black uppercase text-lg ${isActive ? 'text-white' : 'text-zinc-900'}`}>
-                            {el.type === 'gate' ? 'Brama' : el.type === 'door' ? 'Drzwi B.' : 'Okno'}
+                            {el.type === 'gate' ? 'Brama' : el.type === 'door' ? 'Drzwi B.' : el.type === 'skylight' ? 'Świetlik' : 'Okno'}
                           </div>
                           <div className={`text-sm font-medium mt-1 ${isActive ? 'text-white/80' : 'text-zinc-500'}`}>
                             Ściana: <span className="font-bold uppercase">{el.wall}</span>
