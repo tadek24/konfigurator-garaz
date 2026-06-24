@@ -12,7 +12,6 @@ interface ConfigPanelProps {
   selectedWall: WallFace;
   setSelectedWall: Dispatch<SetStateAction<WallFace>>;
   appData: any;
-  // OTO DEFINICJE, KTÓRYCH BRAKOWAŁO:
   isGeneratingAR?: boolean;
   setIsGeneratingAR?: Dispatch<SetStateAction<boolean>>;
 }
@@ -22,7 +21,7 @@ const WOJEWODZTWA = ["Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubus
 function Section({ title, icon, children, defaultOpen = true }: { title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
+    <section className="bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm overflow-hidden mb-4">
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-5 text-left transition-colors hover:bg-zinc-100">
         <h2 className="flex items-center gap-2 font-bold text-lg text-zinc-900"><span className="text-[var(--theme)]">{icon}</span>{title}</h2>
         <ChevronDown size={20} className={`text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -32,25 +31,15 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
+// CAŁKOWICIE PŁASKIE, ZABEZPIECZONE IKONY SVG
 const RoofIcon = ({ type }: { type: RoofType }) => {
-  const w = "#cbd5e1"; const r = "#ef4444"; const d = "#475569";
   return (
-    <svg viewBox="0 0 100 100" className="w-14 h-14 mb-2 drop-shadow-sm transition-transform group-hover:scale-105">
-      {type === 'dual-slope' && (
-        <g><polygon points="10,40 50,10 90,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
-      {type === 'slope-back' && (
-        <g><polygon points="10,25 90,40 10,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
-      {type === 'slope-front' && (
-        <g><polygon points="10,40 90,25 90,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
-      {type === 'slope-left' && (
-        <g><polygon points="10,40 90,20 90,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
-      {type === 'slope-right' && (
-        <g><polygon points="10,20 90,40 10,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
+    <svg viewBox="0 0 100 100" className="w-12 h-12 mb-2 text-[var(--theme)] opacity-90 group-hover:scale-110 transition-transform">
+      {type === 'dual-slope' && <path d="M50 20 L90 50 L90 80 L10 80 L10 50 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
+      {type === 'slope-back' && <path d="M10 30 L90 50 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
+      {type === 'slope-front' && <path d="M10 50 L90 30 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
+      {type === 'slope-left' && <path d="M10 50 L90 20 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
+      {type === 'slope-right' && <path d="M10 20 L90 50 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
     </svg>
   );
 };
@@ -253,7 +242,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   );
 
   return (
-    <div className="space-y-4 pb-12">
+    <div className="pb-12">
       <Section title="Wybierz Typ Garażu" icon={<Home size={20} />}>
         <div className="flex flex-wrap gap-2">
           {([
@@ -351,7 +340,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Drzwi</button>
           <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Okno</button>
-          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik z Pleksy</button>
+          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik (Lufcik)</button>
         </div>
         <div className="space-y-3">
           {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (

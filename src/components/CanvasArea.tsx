@@ -6,19 +6,16 @@ import { GarageConfig, WallFace } from '@/types';
 import GarageModel from './GarageModel';
 import { Suspense, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
 interface CanvasAreaProps {
   config: GarageConfig;
   selectedWall: WallFace;
   activeDimId?: string | null;
   colors?: any[];
-  // OTO DEFINICJE, KTÓRYCH BRAKOWAŁO:
   isGeneratingAR?: boolean;
   onExportAR?: (url: string) => void;
 }
 
-// 1. SILNIK KAMERY
 function CameraRig({ selectedWall, config, activeDimId }: { selectedWall: WallFace; config: GarageConfig, activeDimId?: string | null }) {
   const controlsRef = useRef<any>(null);
 
@@ -44,41 +41,28 @@ function CameraRig({ selectedWall, config, activeDimId }: { selectedWall: WallFa
   return <CameraControls ref={controlsRef} minPolarAngle={Math.PI / 8} maxPolarAngle={Math.PI / 2 - 0.05} minDistance={2} maxDistance={25} makeDefault />;
 }
 
-// 2. LINIE WYMIAROWE
 function MeasurementArrow({ start, end, value }: { start: [number, number, number], end: [number, number, number], value: number }) {
   if (value <= 0) return null; 
-
   const midX = (start[0] + end[0]) / 2;
   const midY = (start[1] + end[1]) / 2;
   const midZ = (start[2] + end[2]) / 2;
-
   return (
     <group>
       <Line points={[start, end]} color="#ea580c" lineWidth={2} dashed={true} dashSize={0.1} gapSize={0.05} />
       <Html position={[midX, midY, midZ]} center zIndexRange={[100, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="bg-white text-zinc-900 text-[11px] font-black px-1.5 py-0.5 rounded shadow-sm border border-zinc-200 whitespace-nowrap">
-          {value} cm
-        </div>
+        <div className="bg-white text-zinc-900 text-[11px] font-black px-1.5 py-0.5 rounded shadow-sm border border-zinc-200 whitespace-nowrap">{value} cm</div>
       </Html>
     </group>
   );
 }
 
-// 3. BIM VIEWER Z WYMIARAMI
 function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeId: string }) {
   const el = config.elements.find(e => e.id === activeId);
   if (!el) return null;
 
-  const w = config.width / 100;
-  const l = config.length / 100;
-  const h = config.height / 100;
-
+  const w = config.width / 100; const l = config.length / 100; const h = config.height / 100;
   const wallW = (el.wall === 'front' || el.wall === 'back') ? w : l;
-  
-  const elW = el.width / 100;
-  const elH = el.height / 100;
-  const elX = el.x / 100;
-  const elY = el.y / 100;
+  const elW = el.width / 100; const elH = el.height / 100; const elX = el.x / 100; const elY = el.y / 100;
 
   const gapLeft = (elX - elW / 2) - (-wallW / 2);
   const gapRight = (wallW / 2) - (elX + elW / 2);
@@ -96,19 +80,10 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
 
   return (
     <group position={pos} rotation={rot}>
-      <mesh>
-        <planeGeometry args={[elW, elH]} />
-        <meshBasicMaterial color="#ea580c" transparent opacity={0.3} depthTest={false} side={THREE.DoubleSide} />
-        <Edges color="#ea580c" scale={1} />
-      </mesh>
-      
+      <mesh><planeGeometry args={[elW, elH]} /><meshBasicMaterial color="#ea580c" transparent opacity={0.3} depthTest={false} side={THREE.DoubleSide} /><Edges color="#ea580c" scale={1} /></mesh>
       <Html center position={[0, 0, 0]} zIndexRange={[100, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="bg-zinc-900 text-white px-3 py-1.5 rounded-lg border-2 border-orange-500 shadow-2xl flex flex-col items-center whitespace-nowrap animate-bounce-in">
-          <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">Wymiary Otworu</span>
-          <span className="text-lg font-black">{el.width} x {el.height} cm</span>
-        </div>
+        <div className="bg-zinc-900 text-white px-3 py-1.5 rounded-lg border-2 border-orange-500 shadow-2xl flex flex-col items-center whitespace-nowrap animate-bounce-in"><span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">Wymiary Otworu</span><span className="text-lg font-black">{el.width} x {el.height} cm</span></div>
       </Html>
-
       <MeasurementArrow start={[-elW/2, 0, 0]} end={[-elW/2 - gapLeft, 0, 0]} value={Math.round(gapLeft * 100)} />
       <MeasurementArrow start={[elW/2, 0, 0]} end={[elW/2 + gapRight, 0, 0]} value={Math.round(gapRight * 100)} />
       <MeasurementArrow start={[0, -elH/2, 0]} end={[0, -elH/2 - gapBottom, 0]} value={Math.round(gapBottom * 100)} />
@@ -117,17 +92,23 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
   );
 }
 
-// 4. EKSPORTER DO AR (.glb)
+// 4. BEZPIECZNY EKSPORTER DO AR (.glb) - Wykorzystuje opóźnienie i asynchroniczny import modułu
 function ARExporter({ isGenerating, onExport }: { isGenerating: boolean; onExport: (url: string) => void }) {
   const { scene } = useThree();
 
   useEffect(() => {
-    if (isGenerating) {
-      const exporter = new GLTFExporter();
-      // Szukamy specyficznej grupy garażu (bez tła)
-      const garageGroup = scene.getObjectByName('garageModelGroup');
-      
-      if (garageGroup) {
+    if (!isGenerating) return;
+
+    const performExport = async () => {
+      try {
+        const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
+        const exporter = new GLTFExporter();
+        const garageGroup = scene.getObjectByName('garageModelGroup');
+        
+        if (!garageGroup) {
+          throw new Error("Główna grupa modelu nie została znaleziona.");
+        }
+
         exporter.parse(
           garageGroup,
           (gltf) => {
@@ -136,13 +117,20 @@ function ARExporter({ isGenerating, onExport }: { isGenerating: boolean; onExpor
             onExport(url);
           },
           (error) => {
-            console.error('Błąd eksportu do AR:', error);
+            console.error('Błąd parsowania GLTF:', error);
             onExport(''); 
           },
           { binary: true }
         );
+      } catch (err) {
+        console.error('Błąd krytyczny eksportu do AR:', err);
+        onExport(''); 
       }
-    }
+    };
+
+    // Dajemy Reactowi 500ms na załadowanie UI z animacją ładowania
+    setTimeout(performExport, 500);
+
   }, [isGenerating, scene, onExport]);
 
   return null;
@@ -151,7 +139,8 @@ function ARExporter({ isGenerating, onExport }: { isGenerating: boolean; onExpor
 // 5. GŁÓWNE PŁÓTNO
 export default function CanvasArea({ config, selectedWall, activeDimId, colors = [], isGeneratingAR = false, onExportAR }: CanvasAreaProps) {
   return (
-    <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [5, 3, 7], fov: 50 }} shadows className="w-full h-full">
+    // Parametr typowania cieni (THREE.PCFShadowMap) rozwiązuje żółte ostrzeżenie w konsoli
+    <Canvas gl={{ preserveDrawingBuffer: true }} shadows={{ type: THREE.PCFShadowMap as any }} camera={{ position: [5, 3, 7], fov: 50 }} className="w-full h-full">
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 15, 10]} intensity={1.5} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} shadow-bias={-0.0005} shadow-camera-left={-15} shadow-camera-right={15} shadow-camera-top={15} shadow-camera-bottom={-15} />
       <directionalLight position={[-10, 10, -10]} intensity={0.5} />
@@ -169,7 +158,6 @@ export default function CanvasArea({ config, selectedWall, activeDimId, colors =
 
       <CameraRig selectedWall={selectedWall} config={config} activeDimId={activeDimId} />
       
-      {/* Niewidoczny nasłuchiwacz AR */}
       {isGeneratingAR && onExportAR && <ARExporter isGenerating={isGeneratingAR} onExport={onExportAR} />}
     </Canvas>
   );

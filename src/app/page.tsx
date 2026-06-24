@@ -8,7 +8,6 @@ import dynamic from 'next/dynamic';
 import { Eye, X } from 'lucide-react';
 import Script from 'next/script';
 
-// Pancerny sposób na uciszenie błędów TypeScript dla Web Components
 const ModelViewer = 'model-viewer' as any;
 
 const CanvasArea = dynamic(() => import('@/components/CanvasArea'), { 
@@ -46,6 +45,13 @@ const FALLBACK_DATA = {
   },
   addons: [], colors: []
 };
+
+const CONFIG_STEPS = [
+  { id: 1, label: 'Dach' },
+  { id: 2, label: 'Wymiary' },
+  { id: 3, label: 'Bramy i Okna' },
+  { id: 4, label: 'Opcje i Kolory' }
+];
 
 export default function Home() {
   const [config, setConfig] = useState<GarageConfig>(INITIAL_CONFIG);
@@ -97,15 +103,18 @@ export default function Home() {
     if (scrollableHeight <= 0) return;
     const scrollPercentage = target.scrollTop / scrollableHeight;
     if (scrollPercentage < 0.20) setActiveStep(1);
-    else if (scrollPercentage < 0.50) setActiveStep(2);
-    else if (scrollPercentage < 0.80) setActiveStep(3);
-    else if (scrollPercentage < 0.98) setActiveStep(4);
-    else setActiveStep(5);
+    else if (scrollPercentage < 0.45) setActiveStep(2);
+    else if (scrollPercentage < 0.70) setActiveStep(3);
+    else setActiveStep(4);
   };
 
   const handleExportAR = (url: string) => {
-    setArBlobUrl(url);
     setIsGeneratingAR(false);
+    if (url) {
+      setArBlobUrl(url);
+    } else {
+      alert("Wystąpił błąd podczas przygotowywania modelu AR. Odśwież stronę i spróbuj ponownie.");
+    }
   };
 
   if (!appData) return <div className="flex h-screen items-center justify-center bg-zinc-900"><div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"></div></div>;
@@ -119,7 +128,6 @@ export default function Home() {
           <button onClick={() => setArBlobUrl(null)} className="absolute top-6 right-6 z-10 bg-white p-3 rounded-full shadow-lg hover:bg-zinc-200 transition-colors">
             <X size={24} className="text-zinc-900" />
           </button>
-          
           <ModelViewer
             src={arBlobUrl}
             ar="true"
@@ -132,7 +140,7 @@ export default function Home() {
             style={{ width: '100%', height: '100%' }}
           >
             <button slot="ar-button" className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-[var(--theme)] text-white px-8 py-4 rounded-full font-bold shadow-2xl text-lg flex items-center gap-2 border-2 border-white/20">
-              <Eye size={20} /> Zobacz na żywo
+              <Eye size={20} /> Zobacz na żywo w skali 1:1
             </button>
           </ModelViewer>
         </div>
@@ -157,15 +165,33 @@ export default function Home() {
             </div>
           )}
           {isGeneratingAR && (
-            <div className="absolute inset-0 bg-zinc-900/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-white">
-              <div className="animate-spin w-12 h-12 border-4 border-[var(--theme)] border-t-transparent rounded-full mb-4"></div>
-              <h2 className="text-xl font-bold">Przygotowywanie modelu AR...</h2>
-              <p className="text-zinc-400 mt-2 text-sm">Pakowanie tekstur i geometrii, prosimy czekać.</p>
+            <div className="absolute inset-0 bg-zinc-900/90 backdrop-blur-md z-50 flex flex-col items-center justify-center text-white">
+              <div className="animate-spin w-16 h-16 border-4 border-[var(--theme)] border-t-transparent rounded-full mb-6"></div>
+              <h2 className="text-2xl font-black uppercase tracking-widest">Generowanie Pakietu AR</h2>
+              <p className="text-zinc-400 mt-2 text-sm max-w-sm text-center">Kompresja geometrii i mapowanie tekstur. Prosimy o chwilę cierpliwości...</p>
             </div>
           )}
         </div>
 
         <div className={`w-full flex flex-col bg-white border-l border-zinc-200 shadow-[-4px_0_25px_rgba(0,0,0,0.05)] relative z-10 ${isReadOnly ? 'md:w-[35%] h-full' : 'h-[60vh] md:h-full md:w-[40%]'}`}>
+          
+          {/* WSKAŹNIK KROKÓW */}
+          {!isReadOnly && (
+            <div className="p-4 bg-white border-b border-zinc-100 hidden md:block">
+              <div className="flex items-center justify-between relative">
+                <div className="absolute top-1/2 left-0 w-full h-[2px] bg-zinc-100 -z-10 -translate-y-1/2" />
+                {CONFIG_STEPS.map((step, idx) => (
+                  <div key={step.id} className="flex flex-col items-center gap-1 z-10">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-colors ${activeStep >= step.id ? 'bg-[var(--theme)] text-white shadow-md shadow-[var(--theme)]/20' : 'bg-zinc-200 text-zinc-500'}`}>
+                      {step.id}
+                    </div>
+                    <span className={`text-[9px] font-bold uppercase tracking-wider ${activeStep >= step.id ? 'text-zinc-800' : 'text-zinc-400'}`}>{step.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {isReadOnly ? (
             <>
               <div className="p-6 bg-zinc-50 border-b border-zinc-200"><h2 className="text-xl font-bold text-zinc-900">Specyfikacja Konstrukcji</h2></div>
