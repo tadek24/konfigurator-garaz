@@ -36,7 +36,16 @@ const INITIAL_CONFIG: GarageConfig = {
 const FALLBACK_DATA = {
   storeUrl: "https://konfigurator.skillup-szkolenia.pl", themeColor: "#ea580c",
   baseConfig: { w: 300, l: 500, h: 210, p: 5000 },
-  pricing: { sqm_t: 'fixed', sqm_v: 150, door_t: 'fixed', door_v: 500, window_t: 'fixed', window_v: 300, skylight_t: 'fixed', skylight_v: 150, wood_t: 'pct', wood_v: 15, gutter_t: 'fixed', gutter_v: 250, flash_corner_t: 'fixed', flash_corner_v: 100, flash_roof_t: 'fixed', flash_roof_v: 100 },
+  pricing: { 
+    sqm_t: 'fixed', sqm_v: 150, 
+    door_t: 'fixed', door_v: 500, 
+    window_t: 'fixed', window_v: 300, 
+    skylight_t: 'fixed', skylight_v: 150, 
+    wood_t: 'pct', wood_v: 15, 
+    gutter_t: 'pct', gutter_v: 5,
+    flash_corner_t: 'fixed', flash_corner_v: 100,
+    flash_roof_t: 'fixed', flash_roof_v: 100
+  },
   addons: [], colors: []
 };
 

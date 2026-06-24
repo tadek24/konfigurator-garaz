@@ -29,30 +29,25 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
+// Proste, płaskie, niepsujące się ikony wektorowe 2D!
 const RoofIcon = ({ type }: { type: RoofType }) => {
-  const g = "#9ca3af"; const gL = "#e5e7eb"; const r = "#ef4444"; const d = "#374151";
+  const wall = "#cbd5e1"; const roof = "#ef4444"; const door = "#334155";
   return (
-    <svg viewBox="0 0 100 100" className="w-16 h-16 mb-2 drop-shadow-md transition-transform group-hover:scale-105">
+    <svg viewBox="0 0 100 100" className="w-14 h-14 mb-2 drop-shadow-sm transition-transform group-hover:scale-105">
       {type === 'dual-slope' && (
-        <g>
-          <polygon points="20,80 50,80 50,30 20,45" fill={gL} />
-          <polygon points="50,80 80,65 80,35 50,30" fill={g} />
-          <polygon points="25,80 45,80 45,50 25,60" fill={d} />
-          <polygon points="20,45 50,30 50,15 20,30" fill="#f87171" />
-          <polygon points="50,30 80,35 50,15 20,30" fill={r} />
-        </g>
+        <g><polygon points="10,40 50,15 90,40" fill={roof} /><rect x="15" y="40" width="70" height="50" fill={wall} /><rect x="40" y="60" width="20" height="30" fill={door} /></g>
       )}
       {type === 'slope-back' && (
-        <g><polygon points="50,90 20,75 20,45 50,60" fill={gL} /><polygon points="50,90 80,75 80,45 50,60" fill={g} /><polygon points="30,80 45,73 45,55 30,62" fill={d} /><polygon points="20,45 50,30 80,45 50,60" fill={r} /></g>
+        <g><polygon points="10,25 90,25 90,40 10,40" fill={roof} /><rect x="15" y="40" width="70" height="50" fill={wall} /><rect x="40" y="60" width="20" height="30" fill={door} /></g>
       )}
       {type === 'slope-front' && (
-        <g><polygon points="50,90 20,75 20,30 50,45" fill={gL} /><polygon points="50,90 80,75 80,30 50,45" fill={g} /><polygon points="30,80 45,73 45,43 30,50" fill={d} /><polygon points="20,30 50,15 80,30 50,45" fill={r} /></g>
+        <g><polygon points="10,40 90,40 90,55 10,55" fill={roof} /><rect x="15" y="55" width="70" height="35" fill={wall} /><rect x="40" y="70" width="20" height="20" fill={door} /></g>
       )}
       {type === 'slope-left' && (
-        <g><polygon points="50,90 20,75 20,30 50,60" fill={gL} /><polygon points="50,90 80,75 80,45 50,60" fill={g} /><polygon points="30,80 45,73 45,55 30,62" fill={d} /><polygon points="20,30 50,20 80,45 50,60" fill={r} /></g>
+        <g><polygon points="10,45 90,20 90,35 10,60" fill={roof} /><polygon points="15,55 85,32 85,90 15,90" fill={wall} /><rect x="40" y="60" width="20" height="30" fill={door} /></g>
       )}
       {type === 'slope-right' && (
-        <g><polygon points="50,90 20,75 20,45 50,60" fill={gL} /><polygon points="50,90 80,75 80,30 50,60" fill={g} /><polygon points="30,80 45,73 45,55 30,62" fill={d} /><polygon points="20,45 50,20 80,30 50,60" fill={r} /></g>
+        <g><polygon points="10,20 90,45 90,60 10,35" fill={roof} /><polygon points="15,32 85,55 85,90 15,90" fill={wall} /><rect x="40" y="60" width="20" height="30" fill={door} /></g>
       )}
     </svg>
   );
@@ -80,44 +75,44 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     const extraArea = Math.max(0, currentArea - baseArea); 
     
     if (extraArea > 0 && pricing.sqm_v) {
-      if (pricing.sqm_t === 'fixed') total += (extraArea * Number(pricing.sqm_v));
-      else percentMultiplier += (extraArea * Number(pricing.sqm_v) / 100);
+      if (pricing.sqm_t === 'fixed') total += (extraArea * Number(pricing.sqm_v || 0));
+      else percentMultiplier += (extraArea * Number(pricing.sqm_v || 0) / 100);
     }
 
     const doorsCount = config.elements.filter(e => e.type === 'door').length;
     const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
     const skylightsCount = config.elements.filter(e => e.type === 'skylight').length;
     
-    if (pricing.door_t === 'fixed') total += (doorsCount * Number(pricing.door_v));
-    else percentMultiplier += (doorsCount * Number(pricing.door_v) / 100);
+    if (pricing.door_t === 'fixed') total += (doorsCount * Number(pricing.door_v || 0));
+    else percentMultiplier += (doorsCount * Number(pricing.door_v || 0) / 100);
 
-    if (pricing.window_t === 'fixed') total += (windowsCount * Number(pricing.window_v));
-    else percentMultiplier += (windowsCount * Number(pricing.window_v) / 100);
+    if (pricing.window_t === 'fixed') total += (windowsCount * Number(pricing.window_v || 0));
+    else percentMultiplier += (windowsCount * Number(pricing.window_v || 0) / 100);
 
-    if (pricing.skylight_t === 'fixed') total += (skylightsCount * Number(pricing.skylight_v));
-    else percentMultiplier += (skylightsCount * Number(pricing.skylight_v) / 100);
+    if (pricing.skylight_t === 'fixed') total += (skylightsCount * Number(pricing.skylight_v || 0));
+    else percentMultiplier += (skylightsCount * Number(pricing.skylight_v || 0) / 100);
 
     if (config.gutters) {
-      if (pricing.gutter_t === 'fixed') total += Number(pricing.gutter_v);
-      if (pricing.gutter_t === 'pct') percentMultiplier += (Number(pricing.gutter_v) / 100);
+      if (pricing.gutter_t === 'fixed') total += Number(pricing.gutter_v || 0);
+      if (pricing.gutter_t === 'pct') percentMultiplier += (Number(pricing.gutter_v || 0) / 100);
     }
 
     if (config.extraOptions?.includes('cornerFlashings')) {
-      if (pricing.flash_corner_t === 'fixed') total += Number(pricing.flash_corner_v);
-      if (pricing.flash_corner_t === 'pct') percentMultiplier += (Number(pricing.flash_corner_v) / 100);
+      if (pricing.flash_corner_t === 'fixed') total += Number(pricing.flash_corner_v || 0);
+      if (pricing.flash_corner_t === 'pct') percentMultiplier += (Number(pricing.flash_corner_v || 0) / 100);
     }
 
     if (config.extraOptions?.includes('roofFlashings')) {
-      if (pricing.flash_roof_t === 'fixed') total += Number(pricing.flash_roof_v);
-      if (pricing.flash_roof_t === 'pct') percentMultiplier += (Number(pricing.flash_roof_v) / 100);
+      if (pricing.flash_roof_t === 'fixed') total += Number(pricing.flash_roof_v || 0);
+      if (pricing.flash_roof_t === 'pct') percentMultiplier += (Number(pricing.flash_roof_v || 0) / 100);
     }
 
     let customAddonTotal = 0;
     (config.extraOptions || []).forEach(addonId => {
       const addon = customAddons.find((a: any) => a.id === addonId);
       if (addon) {
-        if (addon.type === 'fixed') customAddonTotal += Number(addon.price);
-        if (addon.type === 'pct') percentMultiplier += (Number(addon.price) / 100);
+        if (addon.type === 'fixed') customAddonTotal += Number(addon.price || 0);
+        if (addon.type === 'pct') percentMultiplier += (Number(addon.price || 0) / 100);
       }
     });
 
@@ -128,7 +123,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
        if (c && Number(c.price) > 0) total += Number(c.price);
     });
 
-    return Math.round((total * percentMultiplier) + customAddonTotal);
+    const finalPrice = Math.round((total * percentMultiplier) + customAddonTotal);
+    return isNaN(finalPrice) ? 0 : finalPrice;
   }, [config, pricing, customAddons, appData, dbColors]);
 
   const updateConfig = <K extends keyof GarageConfig>(key: K, value: GarageConfig[K]) => {
@@ -389,7 +385,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <span className="text-sm font-semibold text-zinc-700">Rynny i rury spustowe</span>
             </div>
             <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              {pricing.gutter_t === 'pct' ? `+${pricing.gutter_v}%` : `+${pricing.gutter_v} zł`}
+              {pricing.gutter_t === 'pct' ? `+${pricing.gutter_v || 0}%` : `+${pricing.gutter_v || 0} zł`}
             </span>
           </label>
 
@@ -399,7 +395,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <span className="text-sm font-semibold text-zinc-700">Obróbki narożne ściany</span>
             </div>
             <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              {pricing.flash_corner_t === 'pct' ? `+${pricing.flash_corner_v}%` : `+${pricing.flash_corner_v} zł`}
+              {pricing.flash_corner_t === 'pct' ? `+${pricing.flash_corner_v || 0}%` : `+${pricing.flash_corner_v || 0} zł`}
             </span>
           </label>
 
@@ -409,7 +405,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <span className="text-sm font-semibold text-zinc-700">Obróbki krawędzi dachu</span>
             </div>
             <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              {pricing.flash_roof_t === 'pct' ? `+${pricing.flash_roof_v}%` : `+${pricing.flash_roof_v} zł`}
+              {pricing.flash_roof_t === 'pct' ? `+${pricing.flash_roof_v || 0}%` : `+${pricing.flash_roof_v || 0} zł`}
             </span>
           </label>
 
