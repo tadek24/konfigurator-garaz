@@ -4,7 +4,7 @@ import { GarageConfig, RoofType, WallFace, GarageElement, GateType, SheetProfile
 import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2, Settings, Smartphone } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
-import { useMemo, useState, Dispatch, SetStateAction } from 'react';
+import React, { useMemo, useState, Dispatch, SetStateAction } from 'react';
 
 interface ConfigPanelProps {
   config: GarageConfig;
@@ -12,6 +12,9 @@ interface ConfigPanelProps {
   selectedWall: WallFace;
   setSelectedWall: Dispatch<SetStateAction<WallFace>>;
   appData: any;
+  // OTO DEFINICJE, KTÓRYCH BRAKOWAŁO:
+  isGeneratingAR?: boolean;
+  setIsGeneratingAR?: Dispatch<SetStateAction<boolean>>;
 }
 
 const WOJEWODZTWA = ["Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubuskie", "Łódzkie", "Małopolskie", "Mazowieckie", "Opolskie", "Podkarpackie", "Podlaskie", "Pomorskie", "Śląskie", "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"];
@@ -29,7 +32,6 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
-// Czyste, płaskie ikony wektorowe (Zero psucia stylów)
 const RoofIcon = ({ type }: { type: RoofType }) => {
   const w = "#cbd5e1"; const r = "#ef4444"; const d = "#475569";
   return (
@@ -53,7 +55,7 @@ const RoofIcon = ({ type }: { type: RoofType }) => {
   );
 };
 
-export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData }: ConfigPanelProps) {
+export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData, isGeneratingAR, setIsGeneratingAR }: ConfigPanelProps) {
   const [activeColorEdit, setActiveColorEdit] = useState<string | null>(null);
   
   const pricing = appData.pricing || {};
@@ -527,9 +529,13 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <span className="text-3xl font-extrabold text-[var(--theme)]">{calculatedPrice} zł</span>
         </div>
         
-        {/* GUZIK DO ROZBUDOWY AR W PRZYSZŁOŚCI */}
-        <button onClick={() => alert("Moduł AR wymaga doinstalowania biblioteki '@google/model-viewer'. Instrukcję znajdziesz w wiadomości od asystenta.")} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-6 rounded-xl text-zinc-900 bg-zinc-100 hover:bg-zinc-200 transition-all shadow-sm mb-3">
-          <Smartphone size={18} /> Zobacz Garaż w AR (Na żywo)
+        {/* WYzwalacz Modelu AR */}
+        <button 
+          onClick={() => setIsGeneratingAR && setIsGeneratingAR(true)} 
+          disabled={isGeneratingAR}
+          className="w-full flex items-center justify-center gap-2 font-bold py-3 px-6 rounded-xl text-zinc-900 bg-zinc-100 hover:bg-zinc-200 transition-all shadow-sm mb-3 disabled:opacity-50"
+        >
+          <Smartphone size={18} /> {isGeneratingAR ? 'Generowanie pakietu...' : 'Zobacz Garaż w AR (Na żywo)'}
         </button>
 
         <button className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer">

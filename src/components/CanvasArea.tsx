@@ -1,17 +1,21 @@
 "use client";
 
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { CameraControls, ContactShadows, Edges, Html, Line } from '@react-three/drei';
 import { GarageConfig, WallFace } from '@/types';
 import GarageModel from './GarageModel';
 import { Suspense, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
 interface CanvasAreaProps {
   config: GarageConfig;
   selectedWall: WallFace;
   activeDimId?: string | null;
   colors?: any[];
+  // OTO DEFINICJE, KTÓRYCH BRAKOWAŁO:
+  isGeneratingAR?: boolean;
+  onExportAR?: (url: string) => void;
 }
 
 // 1. SILNIK KAMERY
@@ -26,7 +30,6 @@ function CameraRig({ selectedWall, config, activeDimId }: { selectedWall: WallFa
     let targetX = 0; let targetZ = 0; let camX = 0; let camZ = 0;
     const dist = Math.max(w, l) + 4;
 
-    // Mocniejszy zoom, gdy klient lub admin wybierze element do podglądu wymiarów
     const zoomMultiplier = activeDimId ? 0.45 : 1; 
 
     switch (selectedWall) {
@@ -41,9 +44,8 @@ function CameraRig({ selectedWall, config, activeDimId }: { selectedWall: WallFa
   return <CameraControls ref={controlsRef} minPolarAngle={Math.PI / 8} maxPolarAngle={Math.PI / 2 - 0.05} minDistance={2} maxDistance={25} makeDefault />;
 }
 
-// 2. KOMPONENT LINII WYMIAROWEJ (Rysuje "wąsy")
+// 2. LINIE WYMIAROWE
 function MeasurementArrow({ start, end, value }: { start: [number, number, number], end: [number, number, number], value: number }) {
-  // Jeśli odległość do krawędzi jest mniejsza lub równa 0 (np. brama dotyka podłoża), nie rysujemy linii
   if (value <= 0) return null; 
 
   const midX = (start[0] + end[0]) / 2;
@@ -62,7 +64,7 @@ function MeasurementArrow({ start, end, value }: { start: [number, number, numbe
   );
 }
 
-// 3. KOMPONENT NAKŁADKI WYMIAROWEJ (BIM VIEWER)
+// 3. BIM VIEWER Z WYMIARAMI
 function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeId: string }) {
   const el = config.elements.find(e => e.id === activeId);
   if (!el) return null;
@@ -78,7 +80,6 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
   const elX = el.x / 100;
   const elY = el.y / 100;
 
-  // MATEMATYKA - Obliczanie dystansów od krawędzi elementu do krawędzi ściany
   const gapLeft = (elX - elW / 2) - (-wallW / 2);
   const gapRight = (wallW / 2) - (elX + elW / 2);
   const gapBottom = elY;
@@ -87,7 +88,7 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
   let pos: [number, number, number] = [0, 0, 0];
   let rot: [number, number, number] = [0, 0, 0];
 
-  const offset = 0.05; // Wysunięcie, żeby nie zlewało się z blachą ściany
+  const offset = 0.05; 
   if (el.wall === 'front') { pos = [elX, elY + elH/2, l/2 + offset]; }
   else if (el.wall === 'back') { pos = [-elX, elY + elH/2, -l/2 - offset]; rot = [0, Math.PI, 0]; }
   else if (el.wall === 'left') { pos = [-w/2 - offset, elY + elH/2, -elX]; rot = [0, -Math.PI/2, 0]; }
@@ -95,14 +96,12 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
 
   return (
     <group position={pos} rotation={rot}>
-      {/* Kolorowe prześwietlenie wybranego elementu */}
       <mesh>
         <planeGeometry args={[elW, elH]} />
         <meshBasicMaterial color="#ea580c" transparent opacity={0.3} depthTest={false} side={THREE.DoubleSide} />
         <Edges color="#ea580c" scale={1} />
       </mesh>
       
-      {/* ETYKIETA GŁÓWNA - Na samym środku otworu */}
       <Html center position={[0, 0, 0]} zIndexRange={[100, 0]} style={{ pointerEvents: 'none' }}>
         <div className="bg-zinc-900 text-white px-3 py-1.5 rounded-lg border-2 border-orange-500 shadow-2xl flex flex-col items-center whitespace-nowrap animate-bounce-in">
           <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">Wymiary Otworu</span>
@@ -110,21 +109,47 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
         </div>
       </Html>
 
-      {/* LINIE DO KRAWĘDZI */}
-      {/* W lewo */}
       <MeasurementArrow start={[-elW/2, 0, 0]} end={[-elW/2 - gapLeft, 0, 0]} value={Math.round(gapLeft * 100)} />
-      {/* W prawo */}
       <MeasurementArrow start={[elW/2, 0, 0]} end={[elW/2 + gapRight, 0, 0]} value={Math.round(gapRight * 100)} />
-      {/* W dół do ziemi */}
       <MeasurementArrow start={[0, -elH/2, 0]} end={[0, -elH/2 - gapBottom, 0]} value={Math.round(gapBottom * 100)} />
-      {/* W górę do dachu */}
       <MeasurementArrow start={[0, elH/2, 0]} end={[0, elH/2 + gapTop, 0]} value={Math.round(gapTop * 100)} />
     </group>
   );
 }
 
-// 4. GŁÓWNE PŁÓTNO
-export default function CanvasArea({ config, selectedWall, activeDimId, colors = [] }: CanvasAreaProps) {
+// 4. EKSPORTER DO AR (.glb)
+function ARExporter({ isGenerating, onExport }: { isGenerating: boolean; onExport: (url: string) => void }) {
+  const { scene } = useThree();
+
+  useEffect(() => {
+    if (isGenerating) {
+      const exporter = new GLTFExporter();
+      // Szukamy specyficznej grupy garażu (bez tła)
+      const garageGroup = scene.getObjectByName('garageModelGroup');
+      
+      if (garageGroup) {
+        exporter.parse(
+          garageGroup,
+          (gltf) => {
+            const blob = new Blob([gltf as ArrayBuffer], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            onExport(url);
+          },
+          (error) => {
+            console.error('Błąd eksportu do AR:', error);
+            onExport(''); 
+          },
+          { binary: true }
+        );
+      }
+    }
+  }, [isGenerating, scene, onExport]);
+
+  return null;
+}
+
+// 5. GŁÓWNE PŁÓTNO
+export default function CanvasArea({ config, selectedWall, activeDimId, colors = [], isGeneratingAR = false, onExportAR }: CanvasAreaProps) {
   return (
     <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [5, 3, 7], fov: 50 }} shadows className="w-full h-full">
       <ambientLight intensity={0.6} />
@@ -133,8 +158,6 @@ export default function CanvasArea({ config, selectedWall, activeDimId, colors =
 
       <Suspense fallback={null}>
         <GarageModel config={config} colors={colors} />
-        
-        {/* Renderowanie nakładki CAD po kliknięciu elementu */}
         {activeDimId && <DimensionsOverlay config={config} activeId={activeDimId} />}
       </Suspense>
 
@@ -145,6 +168,9 @@ export default function CanvasArea({ config, selectedWall, activeDimId, colors =
       </mesh>
 
       <CameraRig selectedWall={selectedWall} config={config} activeDimId={activeDimId} />
+      
+      {/* Niewidoczny nasłuchiwacz AR */}
+      {isGeneratingAR && onExportAR && <ARExporter isGenerating={isGeneratingAR} onExport={onExportAR} />}
     </Canvas>
   );
 }
