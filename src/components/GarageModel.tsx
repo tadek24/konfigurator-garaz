@@ -12,7 +12,6 @@ interface GarageModelProps {
   colors?: any[];
 }
 
-// Bezpieczna funkcja rozwiązująca kolory - nie wywali się nawet gdy brakuje tablicy colors lub colorId
 function resolveColor(colorId: string | undefined, colors: any[] = []): { hex: string; isWood: boolean; textureUrl: string } {
   if (!colorId) return { hex: '#d4d4d4', isWood: false, textureUrl: '' };
   if (colorId.startsWith('#')) return { hex: colorId, isWood: false, textureUrl: '' };
@@ -155,7 +154,6 @@ function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, wo
 }
 
 export default function GarageModel({ config, colors = [] }: GarageModelProps) {
-  // Zabezpieczenie przed brakiem configu (Crash prevention)
   if (!config) return null;
 
   const w = (config.width || 300) * 0.01;
@@ -301,6 +299,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
               </group>
             );
           } else if (el.type === 'skylight') {
+            // BEZBŁĘDNY ŚWIETLIK - Tylko 1 przezroczysty box wpuszczony w otwór. Zero ram.
             return (
               <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
                 <mesh castShadow={false}>
@@ -341,7 +340,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     );
   };
 
-  // ROOF RENDER - Bezpieczne deklaracje materiałów w JSX (Brak czerwonych ekranów z R3F!)
+  // ROOF RENDER - Bezpieczne i Pancerne 
   const renderRoof = () => {
     const { hex: gutterHex, isWood: isGutterWood, textureUrl: gutterTexUrl } = resolveColor(config.gutterColor, colors);
     const gutterMatProps = { color: isGutterWood ? '#ffffff' : gutterHex, map: isGutterWood && gutterTexUrl && loadedTextures[gutterTexUrl] ? loadedTextures[gutterTexUrl] : undefined, roughness: 0.6, metalness: 0.5 };
@@ -355,7 +354,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     const baseRoofWood = roofTexUrl && loadedTextures[roofTexUrl] ? loadedTextures[roofTexUrl] : trapezTex;
     const baseFasciaWood = fasciaTexUrl && loadedTextures[fasciaTexUrl] ? loadedTextures[fasciaTexUrl] : undefined;
 
-    // Definiowanie materiałów natywnym sposobem R3F
+    // Najbezpieczniejszy w React Fiber sposób definiowania materiałów dla Array
     const renderFasciaMat = (attachName: string) => (
       <meshStandardMaterial attach={attachName} color={isFasciaWood ? '#ffffff' : fasciaHex} map={isFasciaWood && baseFasciaWood ? baseFasciaWood : undefined} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} />
     );
@@ -366,6 +365,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
 
     const gutterR = 0.035; const pipeR = 0.025;
 
+    // RYNNY - Rury spustowe schodzące po krawędzi budynku do samej ziemi
     const renderGutterPipe = (length: number, rot: [number, number, number], posGutter: [number, number, number], posPipe: [number, number, number], pipeHeight: number) => (
       <group>
         <mesh position={posGutter} rotation={rot} castShadow><cylinderGeometry args={[gutterR, gutterR, length, 16]} /><meshStandardMaterial {...gutterMatProps} /></mesh>
@@ -376,16 +376,18 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     if (isDual) {
       const roofTheta = Math.atan2(slopeH, w/2);
       const halfRoofW = w/2 + oX;
-      const paneLen = halfRoofW / Math.cos(roofTheta);
+      // Overlap rozwiązujący problem szpary na szczycie dachu dwuspadowego
+      const overlap = 0.02; 
+      const paneLen = halfRoofW / Math.cos(roofTheta) + overlap;
       
-      const liftY = t/2 + 0.01; 
-      const ridgeY = h + slopeH + liftY;
-      const eavesY = h + liftY - Math.tan(roofTheta)*oX;
+      const ridgeY = h + slopeH; 
+      const eavesY = h - Math.tan(roofTheta)*oX;
 
       return (
         <group>
+          {/* Lewa połać */}
           <group position={[0, ridgeY, 0]} rotation={[0, 0, roofTheta]}>
-            <mesh position={[-paneLen/2, 0, 0]} castShadow receiveShadow>
+            <mesh position={[-(paneLen/2 - overlap/2), 0, 0]} castShadow receiveShadow>
               <boxGeometry args={[paneLen, t, rL]} />
               {renderFasciaMat("material-0")}
               {renderFasciaMat("material-1")}
@@ -395,8 +397,9 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
               {renderFasciaMat("material-5")}
             </mesh>
           </group>
+          {/* Prawa połać */}
           <group position={[0, ridgeY, 0]} rotation={[0, 0, -roofTheta]}>
-            <mesh position={[paneLen/2, 0, 0]} castShadow receiveShadow>
+            <mesh position={[(paneLen/2 - overlap/2), 0, 0]} castShadow receiveShadow>
               <boxGeometry args={[paneLen, t, rL]} />
               {renderFasciaMat("material-0")}
               {renderFasciaMat("material-1")}
@@ -406,10 +409,11 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
               {renderFasciaMat("material-5")}
             </mesh>
           </group>
+          {/* Rynny dla dwuspadowego idą zawsze na tył budynku */}
           {showGutters && (
             <>
-              {renderGutterPipe(rL, [Math.PI/2, 0, 0], [-w/2 - oX, eavesY - 0.02, 0], [-w/2 - oX + 0.035, 0, -l/2 - oZ + 0.05], eavesY)}
-              {renderGutterPipe(rL, [Math.PI/2, 0, 0], [ w/2 + oX, eavesY - 0.02, 0], [ w/2 + oX - 0.035, 0, -l/2 - oZ + 0.05], eavesY)}
+              {renderGutterPipe(rL, [Math.PI/2, 0, 0], [-w/2 - oX, eavesY - 0.01, 0], [-w/2 - oX + 0.035, 0, -l/2 - oZ + 0.05], eavesY)}
+              {renderGutterPipe(rL, [Math.PI/2, 0, 0], [ w/2 + oX, eavesY - 0.01, 0], [ w/2 + oX - 0.035, 0, -l/2 - oZ + 0.05], eavesY)}
             </>
           )}
         </group>
@@ -419,55 +423,42 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     let roofRotX = 0, roofRotZ = 0;
     let gutterSystem = null;
     let paneLenX = rW, paneLenZ = rL;
-    let liftY = t/2 + 0.01;
-    let eavesY = h;
+    const midY = h + slopeH/2; 
 
     if (isFront) {
       roofRotX = Math.atan2(slopeH, l);
-      liftY = (t/2)/Math.cos(roofRotX) + 0.01;
-      eavesY = h + liftY - Math.tan(roofRotX)*oZ;
       paneLenZ = (l + oZ*2) / Math.cos(roofRotX);
-      gutterSystem = renderGutterPipe(rW, [0, 0, Math.PI/2], [0, eavesY - 0.02, l/2 + oZ], [w/2 + oX - 0.05, 0, l/2 + oZ - 0.035], eavesY);
+      const eavesY = h - Math.tan(roofRotX)*oZ;
+      // Wyjątek: dla spadu do przodu rura musi być na froncie
+      gutterSystem = renderGutterPipe(rW, [0, 0, Math.PI/2], [0, eavesY - 0.01, l/2 + oZ], [w/2 + oX - 0.05, 0, l/2 + oZ - 0.035], eavesY);
     } else if (isBack) {
       roofRotX = -Math.atan2(slopeH, l);
-      liftY = (t/2)/Math.cos(Math.abs(roofRotX)) + 0.01;
-      eavesY = h + liftY - Math.tan(Math.abs(roofRotX))*oZ;
       paneLenZ = (l + oZ*2) / Math.cos(Math.abs(roofRotX));
-      gutterSystem = renderGutterPipe(rW, [0, 0, Math.PI/2], [0, eavesY - 0.02, -l/2 - oZ], [w/2 + oX - 0.05, 0, -l/2 - oZ + 0.035], eavesY);
+      const eavesY = h - Math.tan(Math.abs(roofRotX))*oZ;
+      gutterSystem = renderGutterPipe(rW, [0, 0, Math.PI/2], [0, eavesY - 0.01, -l/2 - oZ], [w/2 + oX - 0.05, 0, -l/2 - oZ + 0.035], eavesY);
     } else if (isLeft) {
       roofRotZ = Math.atan2(slopeH, w);
-      liftY = (t/2)/Math.cos(roofRotZ) + 0.01;
-      eavesY = h + liftY - Math.tan(roofRotZ)*oX;
       paneLenX = (w + oX*2) / Math.cos(roofRotZ);
-      gutterSystem = renderGutterPipe(rL, [Math.PI/2, 0, 0], [-w/2 - oX, eavesY - 0.02, 0], [-w/2 - oX + 0.035, 0, -l/2 - oZ + 0.05], eavesY);
+      const eavesY = h - Math.tan(roofRotZ)*oX;
+      gutterSystem = renderGutterPipe(rL, [Math.PI/2, Math.PI, 0], [-w/2 - oX, eavesY - 0.01, 0], [-w/2 - oX + 0.035, 0, -l/2 - oZ + 0.05], eavesY);
     } else if (isRight) {
       roofRotZ = -Math.atan2(slopeH, w);
-      liftY = (t/2)/Math.cos(Math.abs(roofRotZ)) + 0.01;
-      eavesY = h + liftY - Math.tan(Math.abs(roofRotZ))*oX;
       paneLenX = (w + oX*2) / Math.cos(Math.abs(roofRotZ));
-      gutterSystem = renderGutterPipe(rL, [Math.PI/2, 0, 0], [w/2 + oX, eavesY - 0.02, 0], [w/2 + oX - 0.035, 0, -l/2 - oZ + 0.05], eavesY);
+      const eavesY = h - Math.tan(Math.abs(roofRotZ))*oX;
+      gutterSystem = renderGutterPipe(rL, [Math.PI/2, 0, 0], [w/2 + oX, eavesY - 0.01, 0], [w/2 + oX - 0.035, 0, -l/2 - oZ + 0.05], eavesY);
     }
-
-    const ridgeZ = isFront ? -l/2 - oZ : (isBack ? l/2 + oZ : 0);
-    const ridgeX = isLeft ? w/2 + oX : (isRight ? -w/2 - oX : 0);
-    const ridgeY = h + slopeH + liftY;
-
-    const zShift = isFront ? paneLenZ/2 : (isBack ? -paneLenZ/2 : 0);
-    const xShift = isLeft ? -paneLenX/2 : (isRight ? paneLenX/2 : 0);
 
     return (
       <group>
-        <group position={[ridgeX, ridgeY, ridgeZ]} rotation={[roofRotX, 0, roofRotZ]}>
-          <mesh position={[xShift, 0, zShift]} castShadow receiveShadow>
-            <boxGeometry args={[paneLenX, t, paneLenZ]} />
-            {renderFasciaMat("material-0")}
-            {renderFasciaMat("material-1")}
-            {renderMainRoofMat("material-2")}
-            {renderFasciaMat("material-3")}
-            {renderFasciaMat("material-4")}
-            {renderFasciaMat("material-5")}
-          </mesh>
-        </group>
+        <mesh position={[0, midY, 0]} rotation={[roofRotX, 0, roofRotZ]} castShadow receiveShadow>
+          <boxGeometry args={[paneLenX, t, paneLenZ]} />
+          {renderFasciaMat("material-0")}
+          {renderFasciaMat("material-1")}
+          {renderMainRoofMat("material-2")}
+          {renderFasciaMat("material-3")}
+          {renderFasciaMat("material-4")}
+          {renderFasciaMat("material-5")}
+        </mesh>
         {showGutters && gutterSystem}
       </group>
     );

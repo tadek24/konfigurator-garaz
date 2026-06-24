@@ -1,7 +1,7 @@
 "use client";
 
 import { GarageConfig, RoofType, WallFace, GarageElement, GateType, SheetProfile } from '@/types';
-import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2, Settings } from 'lucide-react';
+import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2, Settings, Smartphone } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
 import { useMemo, useState, Dispatch, SetStateAction } from 'react';
@@ -66,7 +66,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   const getColorData = (id: string) => dbColors.find((c: any) => c.id === id) || { hex: '#d4d4d4', label: 'Wybierz', texture: '' };
 
-  // ZABEZPIECZENIE PRZED NaN - Każda wartość jest sprawdzana
   const safeNum = (val: any) => {
     const num = Number(val);
     return isNaN(num) ? 0 : num;
@@ -350,7 +349,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Drzwi</button>
           <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Okno</button>
-          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik (Lufcik)</button>
+          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik z Pleksy</button>
         </div>
         <div className="space-y-3">
           {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (
@@ -527,6 +526,12 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <span className="text-zinc-400 font-medium">Cena całkowita:</span>
           <span className="text-3xl font-extrabold text-[var(--theme)]">{calculatedPrice} zł</span>
         </div>
+        
+        {/* GUZIK DO ROZBUDOWY AR W PRZYSZŁOŚCI */}
+        <button onClick={() => alert("Moduł AR wymaga doinstalowania biblioteki '@google/model-viewer'. Instrukcję znajdziesz w wiadomości od asystenta.")} className="w-full flex items-center justify-center gap-2 font-bold py-3 px-6 rounded-xl text-zinc-900 bg-zinc-100 hover:bg-zinc-200 transition-all shadow-sm mb-3">
+          <Smartphone size={18} /> Zobacz Garaż w AR (Na żywo)
+        </button>
+
         <button className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer">
           Kupuję i płacę
         </button>
