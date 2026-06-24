@@ -29,15 +29,26 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
-// Eleganckie wektorowe ikony dachów
+// Nowe izometryczne ikony dachów 3D
 const RoofIcon = ({ type }: { type: RoofType }) => {
+  const g = "#9ca3af"; const gL = "#d1d5db"; const r = "#ef4444"; const d = "#374151";
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 mb-1 opacity-90 transition-transform hover:scale-110">
-      {type === 'slope-back' && <polygon points="3,18 21,18 21,10 3,14" />}
-      {type === 'dual-slope' && <polygon points="2,18 22,18 22,12 12,5 2,12" />}
-      {type === 'slope-left' && <polygon points="3,18 21,18 21,15 3,7" />}
-      {type === 'slope-right' && <polygon points="3,18 21,18 21,7 3,15" />}
-      {type === 'slope-front' && <polygon points="3,18 21,18 21,14 3,10" />}
+    <svg viewBox="0 0 100 100" className="w-16 h-16 mb-2 drop-shadow-md transition-transform group-hover:scale-105">
+      {type === 'dual-slope' && (
+        <g><polygon points="50,90 20,75 20,45 50,60" fill={gL} /><polygon points="50,90 80,75 80,45 50,60" fill={g} /><polygon points="55,87 75,77 75,55 55,65" fill={d} /><polygon points="20,45 50,25 50,60 20,45" fill="#f87171" /><polygon points="50,60 50,25 80,45 50,60" fill={r} /></g>
+      )}
+      {type === 'slope-back' && (
+        <g><polygon points="50,90 20,75 20,45 50,60" fill={gL} /><polygon points="50,90 80,75 80,45 50,60" fill={g} /><polygon points="55,87 75,77 75,55 55,65" fill={d} /><polygon points="20,45 50,30 80,45 50,60" fill={r} /></g>
+      )}
+      {type === 'slope-front' && (
+        <g><polygon points="50,90 20,75 20,30 50,45" fill={gL} /><polygon points="50,90 80,75 80,30 50,45" fill={g} /><polygon points="55,87 75,77 75,50 55,60" fill={d} /><polygon points="20,30 50,15 80,30 50,45" fill={r} /></g>
+      )}
+      {type === 'slope-left' && (
+        <g><polygon points="50,90 20,75 20,30 50,60" fill={gL} /><polygon points="50,90 80,75 80,45 50,60" fill={g} /><polygon points="55,87 75,77 75,55 55,65" fill={d} /><polygon points="20,30 50,20 80,45 50,60" fill={r} /></g>
+      )}
+      {type === 'slope-right' && (
+        <g><polygon points="50,90 20,75 20,45 50,60" fill={gL} /><polygon points="50,90 80,75 80,30 50,60" fill={g} /><polygon points="55,87 75,77 75,45 55,55" fill={d} /><polygon points="20,45 50,20 80,30 50,60" fill={r} /></g>
+      )}
     </svg>
   );
 };
@@ -77,6 +88,13 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     if (pricing.window_t === 'fixed') total += (windowsCount * Number(pricing.window_v));
     else percentMultiplier += (windowsCount * Number(pricing.window_v) / 100);
 
+    // Cena za Rynny z Pricing WP
+    if (config.gutters) {
+      if (pricing.gutter_t === 'fixed') total += Number(pricing.gutter_v);
+      if (pricing.gutter_t === 'pct') percentMultiplier += (Number(pricing.gutter_v) / 100);
+    }
+
+    // Dodatki niestandardowe z WP
     let customAddonTotal = 0;
     (config.extraOptions || []).forEach(addonId => {
       const addon = customAddons.find((a: any) => a.id === addonId);
@@ -229,7 +247,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <button
                 key={rt.id}
                 onClick={() => updateConfig('roofType', rt.id)}
-                className={`flex-1 min-w-[30%] sm:min-w-[100px] rounded-xl border-2 p-3 flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`flex-1 min-w-[30%] sm:min-w-[100px] rounded-xl border-2 p-3 flex flex-col items-center justify-center gap-1 transition-all group ${
                   active
                     ? 'border-[var(--theme)] bg-zinc-50 shadow-sm text-[var(--theme)]'
                     : 'border-zinc-200 bg-white hover:border-zinc-300 text-zinc-600'
@@ -346,34 +364,57 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
       <Section title="Opcje Dodatkowe" icon={<Settings size={20} />}>
         <div className="space-y-3">
-          {customAddons.length === 0 ? (
-            <p className="text-sm text-zinc-500 italic text-center py-4">Brak dodatkowych opcji skonfigurowanych w WordPress.</p>
-          ) : (
-            customAddons.map((opt: any) => {
-              const isActive = (config.extraOptions || []).includes(opt.id);
-              return (
-                <label key={opt.id} className="flex items-center justify-between cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <input 
-                      type="checkbox" 
-                      checked={isActive} 
-                      onChange={(e) => {
-                        const next = e.target.checked 
-                          ? [...(config.extraOptions || []), opt.id] 
-                          : (config.extraOptions || []).filter(x => x !== opt.id);
-                        updateConfig('extraOptions' as any, next);
-                      }} 
-                      className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" 
-                    />
-                    <span className="text-sm font-semibold text-zinc-700">{opt.label}</span>
-                  </div>
-                  <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-                    {opt.type === 'pct' ? `+${opt.price}%` : `+${opt.price} zł`}
-                  </span>
-                </label>
-              );
-            })
-          )}
+          {/* Rynny dachowe - na stałe zintegrowane z PHP WP */}
+          <label className="flex items-center justify-between cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm">
+            <div className="flex items-center gap-3">
+              <input 
+                type="checkbox" 
+                checked={config.gutters} 
+                onChange={(e) => updateConfig('gutters', e.target.checked)} 
+                className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" 
+              />
+              <span className="text-sm font-semibold text-zinc-700">Rynny dachowe</span>
+            </div>
+            <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
+              {pricing.gutter_t === 'pct' ? `+${pricing.gutter_v}%` : `+${pricing.gutter_v} zł`}
+            </span>
+          </label>
+
+          {/* Opcje obróbek wizualnych */}
+          <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm">
+            <input type="checkbox" checked={config.extraOptions?.includes('cornerFlashings')} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), 'cornerFlashings'] : (config.extraOptions || []).filter(x => x !== 'cornerFlashings'); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)]" />
+            <span className="text-sm font-semibold text-zinc-700">Obróbki narożne ściany</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm">
+            <input type="checkbox" checked={config.extraOptions?.includes('roofFlashings')} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), 'roofFlashings'] : (config.extraOptions || []).filter(x => x !== 'roofFlashings'); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)]" />
+            <span className="text-sm font-semibold text-zinc-700">Obróbki krawędzi dachu</span>
+          </label>
+
+          {/* Opcje konfigurowane przez Ciebie dynamicznie z panelu WP */}
+          {customAddons.map((opt: any) => {
+            const isActive = (config.extraOptions || []).includes(opt.id);
+            return (
+              <label key={opt.id} className="flex items-center justify-between cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm">
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="checkbox" 
+                    checked={isActive} 
+                    onChange={(e) => {
+                      const next = e.target.checked 
+                        ? [...(config.extraOptions || []), opt.id] 
+                        : (config.extraOptions || []).filter(x => x !== opt.id);
+                      updateConfig('extraOptions' as any, next);
+                    }} 
+                    className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" 
+                  />
+                  <span className="text-sm font-semibold text-zinc-700">{opt.label}</span>
+                </div>
+                <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
+                  {opt.type === 'pct' ? `+${opt.price}%` : `+${opt.price} zł`}
+                </span>
+              </label>
+            );
+          })}
         </div>
       </Section>
 
