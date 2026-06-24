@@ -29,13 +29,14 @@ const INITIAL_CONFIG: GarageConfig = {
   doorColor: '#3b3b3c', doorProfile: 'pionowe-t7',
   cornerFlashingColor: '#3b3b3c',
   roofFlashingColor: '#3b3b3c',
+  gutterColor: '#3b3b3c',
   windowColor: '#ffffff',
 };
 
 const FALLBACK_DATA = {
   storeUrl: "https://konfigurator.skillup-szkolenia.pl", themeColor: "#ea580c",
-  baseConfig: { w: 300, l: 500, h: 210, p: 1000 },
-  pricing: { sqm_t: 'fixed', sqm_v: 150, door_t: 'fixed', door_v: 500, window_t: 'fixed', window_v: 300, wood_t: 'pct', wood_v: 15, gutter_t: 'pct', gutter_v: 5 },
+  baseConfig: { w: 300, l: 500, h: 210, p: 5000 },
+  pricing: { sqm_t: 'fixed', sqm_v: 150, door_t: 'fixed', door_v: 500, window_t: 'fixed', window_v: 300, skylight_t: 'fixed', skylight_v: 150, wood_t: 'pct', wood_v: 15, gutter_t: 'fixed', gutter_v: 250, flash_corner_t: 'fixed', flash_corner_v: 100, flash_roof_t: 'fixed', flash_roof_v: 100 },
   addons: [], colors: []
 };
 
@@ -65,8 +66,7 @@ export default function Home() {
         setAppData(payload);
         if (!savedConfigBase64) setConfig(prev => ({ ...prev, width: payload.baseConfig.w, length: payload.baseConfig.l, height: payload.baseConfig.h }));
       } catch (e: any) { setAppData(FALLBACK_DATA); }
-    } else {
-      // Zapobiega awarii BIM Viewera, gdy nie ma init_data z ustawieniami WP
+    } else if (!savedConfigBase64) {
       setAppData(FALLBACK_DATA);
     }
 
@@ -76,6 +76,7 @@ export default function Home() {
         const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decoded, c => c.charCodeAt(0)));
         setConfig(JSON.parse(utf8));
         setIsReadOnly(true);
+        if (!appData) setAppData({ themeColor: "#ea580c" });
       } catch (e) { console.error(e); }
     }
   }, []);

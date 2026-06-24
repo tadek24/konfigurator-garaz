@@ -2,7 +2,6 @@ export type RoofType = 'dual-slope' | 'slope-front' | 'slope-back' | 'slope-left
 export type WallFace = 'front' | 'back' | 'left' | 'right';
 export type GateType = 'up-and-over' | 'swing' | 'sectional';
 
-// NOWE PROFILE BLACHY (T7, T14, T17 w pionie i poziomie)
 export type SheetProfile = 'pionowe-t7' | 'poziome-t7' | 'pionowe-t14' | 'poziome-t14' | 'pionowe-t17' | 'poziome-t17';
 
 export interface GarageElement {
@@ -28,12 +27,11 @@ export interface GarageConfig {
   elements: GarageElement[];
   extraOptions?: string[];
   
-  // NOWY SYSTEM KOLORÓW I OBRÓBEK
-  applyColorToAll: boolean; // Checkbox "Zastosuj do wszystkich"
-  removeFoil: boolean; // Ściągnięcie folii
+  applyColorToAll: boolean;
+  removeFoil: boolean;
   
   wallProfile: SheetProfile;
-  wallColor: string; // Zapisuje ID koloru z bazy WP
+  wallColor: string;
   
   roofProfile: SheetProfile;
   roofColor: string;
@@ -44,8 +42,9 @@ export interface GarageConfig {
   doorProfile: SheetProfile;
   doorColor: string;
   
-  cornerFlashingColor: string; // Obróbki narożne
-  roofFlashingColor: string;   // Obróbki dachu
+  cornerFlashingColor: string; 
+  roofFlashingColor: string;   
+  gutterColor: string; // NOWE: Kolor rynien
   
   windowColor: string;
 }

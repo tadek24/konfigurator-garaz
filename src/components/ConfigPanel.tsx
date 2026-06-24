@@ -29,22 +29,16 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
-// Skorygowane ikony dachów - dach dwuspadowy jako prawdziwy trójkąt na froncie
 const RoofIcon = ({ type }: { type: RoofType }) => {
   const g = "#9ca3af"; const gL = "#e5e7eb"; const r = "#ef4444"; const d = "#374151";
   return (
     <svg viewBox="0 0 100 100" className="w-16 h-16 mb-2 drop-shadow-md transition-transform group-hover:scale-105">
       {type === 'dual-slope' && (
         <g>
-          {/* Ściana frontowa (trójkąt) */}
           <polygon points="20,80 50,80 50,30 20,45" fill={gL} />
-          {/* Ściana boczna prawa */}
           <polygon points="50,80 80,65 80,35 50,30" fill={g} />
-          {/* Brama */}
           <polygon points="25,80 45,80 45,50 25,60" fill={d} />
-          {/* Dach lewy */}
           <polygon points="20,45 50,30 50,15 20,30" fill="#f87171" />
-          {/* Dach prawy */}
           <polygon points="50,30 80,35 50,15 20,30" fill={r} />
         </g>
       )}
@@ -91,7 +85,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     }
 
     const doorsCount = config.elements.filter(e => e.type === 'door').length;
-    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window' || e.type === 'skylight').length;
+    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
+    const skylightsCount = config.elements.filter(e => e.type === 'skylight').length;
     
     if (pricing.door_t === 'fixed') total += (doorsCount * Number(pricing.door_v));
     else percentMultiplier += (doorsCount * Number(pricing.door_v) / 100);
@@ -99,14 +94,23 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     if (pricing.window_t === 'fixed') total += (windowsCount * Number(pricing.window_v));
     else percentMultiplier += (windowsCount * Number(pricing.window_v) / 100);
 
+    if (pricing.skylight_t === 'fixed') total += (skylightsCount * Number(pricing.skylight_v));
+    else percentMultiplier += (skylightsCount * Number(pricing.skylight_v) / 100);
+
     if (config.gutters) {
       if (pricing.gutter_t === 'fixed') total += Number(pricing.gutter_v);
       if (pricing.gutter_t === 'pct') percentMultiplier += (Number(pricing.gutter_v) / 100);
     }
 
-    // Sztywne ceny za obróbki
-    if (config.extraOptions?.includes('cornerFlashings')) total += 100;
-    if (config.extraOptions?.includes('roofFlashings')) total += 100;
+    if (config.extraOptions?.includes('cornerFlashings')) {
+      if (pricing.flash_corner_t === 'fixed') total += Number(pricing.flash_corner_v);
+      if (pricing.flash_corner_t === 'pct') percentMultiplier += (Number(pricing.flash_corner_v) / 100);
+    }
+
+    if (config.extraOptions?.includes('roofFlashings')) {
+      if (pricing.flash_roof_t === 'fixed') total += Number(pricing.flash_roof_v);
+      if (pricing.flash_roof_t === 'pct') percentMultiplier += (Number(pricing.flash_roof_v) / 100);
+    }
 
     let customAddonTotal = 0;
     (config.extraOptions || []).forEach(addonId => {
@@ -117,7 +121,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       }
     });
 
-    const activeColors = [config.wallColor, config.roofColor, config.gateColor, config.cornerFlashingColor, config.roofFlashingColor];
+    const activeColors = [config.wallColor, config.roofColor, config.gateColor, config.cornerFlashingColor, config.roofFlashingColor, config.gutterColor];
     const uniquePremiumColors = Array.from(new Set(activeColors));
     uniquePremiumColors.forEach(cId => {
        const c = dbColors.find((col: any) => col.id === cId);
@@ -135,6 +139,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         next.gateColor = prev.wallColor;
         next.cornerFlashingColor = prev.wallColor;
         next.roofFlashingColor = prev.wallColor;
+        next.gutterColor = prev.wallColor;
       }
       return next;
     });
@@ -146,7 +151,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     if (config.applyColorToAll) {
       setConfig(prev => ({
         ...prev,
-        wallColor: colorId, roofColor: colorId, gateColor: colorId, cornerFlashingColor: colorId, roofFlashingColor: colorId
+        wallColor: colorId, roofColor: colorId, gateColor: colorId, cornerFlashingColor: colorId, roofFlashingColor: colorId, gutterColor: colorId
       }));
     } else {
       updateConfig(activeColorEdit as keyof GarageConfig, colorId as any);
@@ -322,14 +327,14 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                 }`}
               >
-                {gate.isOpen ? '🔓 Zamknij bramę (pogląd)' : '🔑 Otwórz bramę (pogląd)'}
+                {gate.isOpen ? '🔓 Zamknij bramę' : '🔑 Otwórz bramę (pogląd)'}
               </button>
             </div>
           </div>
         ))}
       </Section>
 
-      <Section title="Drzwi i Okna" icon={<Layers size={20} />}>
+      <Section title="Drzwi, Okna i Świetliki" icon={<Layers size={20} />}>
         <div className="mb-4">
           <label className="text-sm font-medium text-zinc-700 block mb-2">Edytuj ścianę:</label>
           <div className="flex gap-2">
@@ -343,7 +348,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Drzwi</button>
           <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Okno</button>
-          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik</button>
+          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik z Pleksy</button>
         </div>
         <div className="space-y-3">
           {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (
@@ -390,18 +395,22 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
           <label className="flex items-center justify-between cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm">
             <div className="flex items-center gap-3">
-              <input type="checkbox" checked={config.extraOptions?.includes('cornerFlashings')} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), 'cornerFlashings'] : (config.extraOptions || []).filter(x => x !== 'cornerFlashings'); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)]" />
+              <input type="checkbox" checked={config.extraOptions?.includes('cornerFlashings')} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), 'cornerFlashings'] : (config.extraOptions || []).filter(x => x !== 'cornerFlashings'); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" />
               <span className="text-sm font-semibold text-zinc-700">Obróbki narożne ściany</span>
             </div>
-            <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">+100 zł</span>
+            <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
+              {pricing.flash_corner_t === 'pct' ? `+${pricing.flash_corner_v}%` : `+${pricing.flash_corner_v} zł`}
+            </span>
           </label>
 
           <label className="flex items-center justify-between cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm">
             <div className="flex items-center gap-3">
-              <input type="checkbox" checked={config.extraOptions?.includes('roofFlashings')} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), 'roofFlashings'] : (config.extraOptions || []).filter(x => x !== 'roofFlashings'); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)]" />
+              <input type="checkbox" checked={config.extraOptions?.includes('roofFlashings')} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), 'roofFlashings'] : (config.extraOptions || []).filter(x => x !== 'roofFlashings'); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" />
               <span className="text-sm font-semibold text-zinc-700">Obróbki krawędzi dachu</span>
             </div>
-            <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">+100 zł</span>
+            <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
+              {pricing.flash_roof_t === 'pct' ? `+${pricing.flash_roof_v}%` : `+${pricing.flash_roof_v} zł`}
+            </span>
           </label>
 
           {customAddons.map((opt: any) => {
@@ -456,6 +465,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               { label: 'Kolor ścian', key: 'wallColor' },
               { label: 'Brama', key: 'gateColor' },
               { label: 'Kolor dachu', key: 'roofColor' },
+              { label: 'Kolor rynien', key: 'gutterColor' },
               { label: 'Obróbki narożne', key: 'cornerFlashingColor' },
               { label: 'Obróbki dachu', key: 'roofFlashingColor' },
             ].map((item) => {
