@@ -85,7 +85,7 @@ export default function Home() {
         const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decoded, c => c.charCodeAt(0)));
         setConfig(JSON.parse(utf8));
         setIsReadOnly(true);
-        if (!appData) setAppData({ themeColor: "#ea580c" });
+        if (!appData) setAppData(FALLBACK_DATA); // Wymuszenie załadowania jakichkolwiek cen dla trybu podglądu
       } catch (e) { console.error(e); }
     }
   }, []);
