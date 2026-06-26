@@ -78,10 +78,16 @@ export default function Home() {
     let parsedAppData = null;
     if (initDataRaw) {
       try {
-        const decodedJson = decodeURIComponent(escape(window.atob(decodeURIComponent(initDataRaw))));
+        // SUPER-PANCERNE DEKODOWANIE DANYCH Z WORDPRESSA
+        // Zamienia ewentualne spacje na +, dekoduje Base64 i zmusza do bezpiecznego odczytu UTF-8
+        const base64Str = initDataRaw.replace(/ /g, '+');
+        const decodedStr = atob(base64Str);
+        const decodedJson = new TextDecoder("utf-8").decode(Uint8Array.from(decodedStr, c => c.charCodeAt(0)));
+        
         parsedAppData = JSON.parse(decodedJson);
         setAppData(parsedAppData);
       } catch (e: any) { 
+        console.error("Błąd dekodowania bazy kolorów i cennika: ", e);
         parsedAppData = FALLBACK_DATA;
         setAppData(FALLBACK_DATA); 
       }
@@ -92,12 +98,17 @@ export default function Home() {
 
     if (savedConfigBase64) {
       try {
-        const decoded = atob(decodeURIComponent(savedConfigBase64));
-        const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decoded, c => c.charCodeAt(0)));
+        // Podobnie pancerne dekodowanie dla zapisanych projektów w archiwum
+        const base64StrConfig = savedConfigBase64.replace(/ /g, '+');
+        const decodedConfig = atob(base64StrConfig);
+        const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decodedConfig, c => c.charCodeAt(0)));
+        
         const loadedConfig = JSON.parse(utf8);
         setConfig(loadedConfig);
         setIsReadOnly(true);
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+        console.error("Błąd wczytywania zapisanej konstrukcji: ", e); 
+      }
     } else if (parsedAppData && !savedConfigBase64) {
       setConfig(prev => ({ ...prev, width: parsedAppData.baseConfig.w, length: parsedAppData.baseConfig.l, height: parsedAppData.baseConfig.h }));
     }
@@ -125,18 +136,13 @@ export default function Home() {
 
   if (!appData) return <div className="flex h-screen items-center justify-center bg-zinc-900"><div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"></div></div>;
 
-  // FUNKCJA RATUJĄCA STARE KOLORY: Szuka po nowym ID lub bazowym (przed "_")
   const getColorLabel = (colorId: string) => {
     if (!appData || !appData.colors || !colorId) return 'Brak';
-    
     let c = appData.colors.find((col: any) => col.id === colorId);
-    
-    // Jeśli nie znalazł, ale stare ID miało cyferki (np. zloty-dab_45) szuka po samej nazwie
     if (!c && colorId.includes('_')) {
       const baseId = colorId.split('_')[0];
       c = appData.colors.find((col: any) => col.id === baseId || col.id.startsWith(baseId));
     }
-    
     return c ? c.label : 'Standardowy';
   };
 
