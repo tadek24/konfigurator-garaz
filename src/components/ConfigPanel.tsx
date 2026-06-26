@@ -32,24 +32,13 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
 }
 
 const RoofIcon = ({ type }: { type: RoofType }) => {
-  const w = "#cbd5e1"; const r = "#ef4444"; const d = "#475569";
   return (
-    <svg viewBox="0 0 100 100" className="w-14 h-14 mb-2 drop-shadow-sm transition-transform group-hover:scale-105">
-      {type === 'dual-slope' && (
-        <g><polygon points="10,40 50,10 90,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
-      {type === 'slope-back' && (
-        <g><polygon points="10,25 90,40 10,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
-      {type === 'slope-front' && (
-        <g><polygon points="10,40 90,25 90,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
-      {type === 'slope-left' && (
-        <g><polygon points="10,40 90,20 90,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
-      {type === 'slope-right' && (
-        <g><polygon points="10,20 90,40 10,40" fill={r}/><rect x="15" y="40" width="70" height="50" fill={w}/><rect x="40" y="60" width="20" height="30" fill={d}/></g>
-      )}
+    <svg viewBox="0 0 100 100" className="w-12 h-12 mb-2 text-[var(--theme)] opacity-90 group-hover:scale-110 transition-transform">
+      {type === 'dual-slope' && <path d="M50 20 L90 50 L90 80 L10 80 L10 50 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
+      {type === 'slope-back' && <path d="M10 30 L90 50 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
+      {type === 'slope-front' && <path d="M10 50 L90 30 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
+      {type === 'slope-left' && <path d="M10 50 L90 20 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
+      {type === 'slope-right' && <path d="M10 20 L90 50 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
     </svg>
   );
 };
@@ -68,7 +57,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     return isNaN(num) ? 0 : num;
   };
 
-  // FORMATOWANIE ETYKIET CENNIKA (Wyjaśnia użytkownikowi na żywo, od czego liczony jest %)
   const formatPriceLabel = (type: string, val: any) => {
     const v = safeNum(val);
     if (type === 'fixed') return `+${v} zł`;
@@ -77,29 +65,23 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     return `+${v}`;
   };
 
-  // KOMPLETNA MATEMATYKA CENNIKA
   const calculatedPrice = useMemo(() => {
     const basePrice = safeNum(appData.baseConfig?.p); 
     let sum = basePrice;
     let totalMultiplier = 1;
     
-    // Silnik przydzielający koszty odpowiednio do BAZY lub SUMY KOŃCOWEJ
     const applyPrice = (type: string, val: number, count: number = 1) => {
       if (type === 'fixed') sum += val * count;
       else if (type === 'pct_base') sum += basePrice * (val / 100) * count;
       else if (type === 'pct_total' || type === 'pct') totalMultiplier += (val / 100) * count;
     };
 
-    // Obliczanie m2
     const baseArea = (safeNum(appData.baseConfig?.w) / 100) * (safeNum(appData.baseConfig?.l) / 100);
     const currentArea = (config.width / 100) * (config.length / 100);
     const extraArea = Math.max(0, currentArea - baseArea); 
     
-    if (extraArea > 0 && safeNum(pricing.sqm_v) > 0) {
-      applyPrice(pricing.sqm_t, safeNum(pricing.sqm_v), extraArea);
-    }
+    if (extraArea > 0 && safeNum(pricing.sqm_v) > 0) applyPrice(pricing.sqm_t, safeNum(pricing.sqm_v), extraArea);
 
-    // Obliczanie sztuk
     const doorsCount = config.elements.filter(e => e.type === 'door').length;
     const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
     const skylightsCount = config.elements.filter(e => e.type === 'skylight').length;
@@ -108,18 +90,15 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     if (windowsCount > 0) applyPrice(pricing.window_t, safeNum(pricing.window_v), windowsCount);
     if (skylightsCount > 0) applyPrice(pricing.skylight_t, safeNum(pricing.skylight_v), skylightsCount);
 
-    // Opcje blacharskie
     if (config.gutters) applyPrice(pricing.gutter_t, safeNum(pricing.gutter_v));
     if (config.extraOptions?.includes('cornerFlashings')) applyPrice(pricing.flash_corner_t, safeNum(pricing.flash_corner_v));
     if (config.extraOptions?.includes('roofFlashings')) applyPrice(pricing.flash_roof_t, safeNum(pricing.flash_roof_v));
 
-    // Niestandardowe dodatki
     (config.extraOptions || []).forEach(addonId => {
       const addon = customAddons.find((a: any) => a.id === addonId);
       if (addon) applyPrice(addon.type, safeNum(addon.price));
     });
 
-    // Dopłaty za kolory PREMIUM
     const activeColors = [config.wallColor, config.roofColor, config.gateColor, config.cornerFlashingColor, config.roofFlashingColor, config.gutterColor];
     const uniquePremiumColors = Array.from(new Set(activeColors));
     uniquePremiumColors.forEach(cId => {
@@ -147,7 +126,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   const handleColorSelect = (colorId: string) => {
     if (!activeColorEdit) return;
-    
     if (config.applyColorToAll) {
       setConfig(prev => ({
         ...prev,
@@ -197,15 +175,26 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
-  // DYNAMICZNE GRUPOWANIE KOLORÓW NA PODSTAWIE BAZY
-  const groupedColors = useMemo(() => {
-    return dbColors.reduce((acc: any, c: any) => {
+  // SYSTEM KOLEJNOŚCI GRUP KOLORÓW
+  const sortedGroupedColors = useMemo(() => {
+    const groups = dbColors.reduce((acc: any, c: any) => {
       const group = c.type || 'Inne';
       if (!acc[group]) acc[group] = [];
       acc[group].push(c);
       return acc;
     }, {});
-  }, [dbColors]);
+
+    const orderStr = appData.colorGroupsOrder || 'Matowe, Drewnopodobne, Gładkie';
+    const orderArr = orderStr.split(',').map((s: string) => s.trim().toLowerCase());
+
+    return Object.entries(groups).sort(([groupA], [groupB]) => {
+      let idxA = orderArr.indexOf(groupA.toLowerCase());
+      let idxB = orderArr.indexOf(groupB.toLowerCase());
+      if (idxA === -1) idxA = 999;
+      if (idxB === -1) idxB = 999;
+      return idxA - idxB;
+    });
+  }, [dbColors, appData.colorGroupsOrder]);
 
   return (
     <div className="pb-12">
@@ -306,7 +295,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Drzwi</button>
           <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Okno</button>
-          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik (Lufcik)</button>
+          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik z Pleksy</button>
         </div>
         <div className="space-y-3">
           {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (
@@ -379,9 +368,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                   <input type="checkbox" checked={isActive} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), opt.id] : (config.extraOptions || []).filter(x => x !== opt.id); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" />
                   <span className="text-sm font-semibold text-zinc-700">{opt.label}</span>
                 </div>
-                <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-                  {formatPriceLabel(opt.type, opt.price)}
-                </span>
+                <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">{formatPriceLabel(opt.type, opt.price)}</span>
               </label>
             );
           })}
@@ -421,7 +408,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             <h3 className="font-bold tracking-widest flex items-center gap-2"><PaintBucket size={16}/> KOLORY GARAŻU</h3>
           </div>
           
-          {/* NOWY SYSTEM WYBORU KOLORÓW (Inline Dropdown) */}
           <div className="p-2">
             {[
               { label: 'Kolor ścian', key: 'wallColor' },
@@ -456,37 +442,35 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                     </div>
                   </div>
 
-                  {/* Rozwijane menu z kolorami (Podział na dynamiczne kolumny) */}
                   {isEditing && (
-                    <div className="mt-1 mb-3 p-4 bg-[#131315] rounded-xl border border-zinc-800 shadow-inner">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6">
-                        {Object.entries(groupedColors).map(([groupName, colorsList]) => (
-                          <div key={groupName}>
-                            <h5 className="font-bold text-[10px] mb-3 text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-2">{groupName}</h5>
-                            <div className="grid grid-cols-1 gap-1">
-                              {(colorsList as any[]).map((c: any) => {
-                                const isSelected = config[item.key as keyof GarageConfig] === c.id;
-                                return (
-                                  <button 
-                                    key={c.id} 
-                                    onClick={(e) => { e.stopPropagation(); handleColorSelect(c.id); }} 
-                                    className={`flex items-center gap-3 p-2 rounded-lg transition-colors w-full text-left ${isSelected ? 'bg-zinc-800 ring-1 ring-[var(--theme)]' : 'hover:bg-zinc-800'}`}
-                                  >
-                                    {c.texture ? (
-                                      <div className="w-6 h-6 rounded border border-zinc-600 bg-cover bg-center shadow-sm" style={{backgroundImage: `url(${c.texture})`}}></div>
-                                    ) : (
-                                      <div className="w-6 h-6 rounded border border-zinc-600 shadow-sm" style={{backgroundColor: c.hex}}></div>
-                                    )}
-                                    <span className={`text-xs font-medium ${isSelected ? 'text-[var(--theme)]' : 'text-zinc-300'}`}>
-                                      {c.label} {safeNum(c.price) > 0 ? `(+${c.price}zł)` : ''}
-                                    </span>
-                                  </button>
-                                )
-                              })}
-                            </div>
+                    <div className="mt-1 mb-3 p-4 bg-[#131315] rounded-xl border border-zinc-800 shadow-inner flex flex-col gap-6">
+                      {sortedGroupedColors.map(([groupName, colorsList]) => (
+                        <div key={groupName as string}>
+                          <h5 className="font-bold text-[10px] mb-3 text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-2">{groupName as string}</h5>
+                          {/* SIATKA KOLORÓW - Wiele kolumn dla oszczędności miejsca */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                            {(colorsList as any[]).map((c: any) => {
+                              const isSelected = config[item.key as keyof GarageConfig] === c.id;
+                              return (
+                                <button 
+                                  key={c.id} 
+                                  onClick={(e) => { e.stopPropagation(); handleColorSelect(c.id); }} 
+                                  className={`flex items-center gap-3 p-2 rounded-lg transition-colors w-full text-left ${isSelected ? 'bg-zinc-800 ring-1 ring-[var(--theme)]' : 'hover:bg-zinc-800'}`}
+                                >
+                                  {c.texture ? (
+                                    <div className="w-6 h-6 rounded-full flex-none border border-zinc-600 bg-cover bg-center shadow-sm" style={{backgroundImage: `url(${c.texture})`}}></div>
+                                  ) : (
+                                    <div className="w-6 h-6 rounded-full flex-none border border-zinc-600 shadow-sm" style={{backgroundColor: c.hex}}></div>
+                                  )}
+                                  <span className={`text-[11px] font-medium leading-tight ${isSelected ? 'text-[var(--theme)]' : 'text-zinc-300'}`}>
+                                    {c.label} <span className="block opacity-60 font-normal">{safeNum(c.price) > 0 ? `(+${c.price}zł)` : ''}</span>
+                                  </span>
+                                </button>
+                              )
+                            })}
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
