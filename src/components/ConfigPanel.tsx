@@ -45,7 +45,6 @@ const RoofIcon = ({ type }: { type: RoofType }) => {
 
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData, isGeneratingAR, setIsGeneratingAR }: ConfigPanelProps) {
   const [activeColorEdit, setActiveColorEdit] = useState<string | null>(null);
-  // Stan przechowujący wybrane województwo
   const [wojewodztwo, setWojewodztwo] = useState<string>("");
   
   const pricing = appData.pricing || {};
@@ -112,7 +111,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     return isNaN(finalPrice) ? 0 : finalPrice;
   }, [config, pricing, customAddons, appData, dbColors]);
 
-  // Dynamiczne budowanie listy tekstowej wybranych akcesoriów do koszyka WooCommerce
   const activeAddonsText = useMemo(() => {
     const list: string[] = [];
     if (config.gutters) list.push("Rynny i rury spustowe");
@@ -128,25 +126,27 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   // FUNKCJA NADZORUJĄCA PRZEKIEROWANIE DO KOSZYKA WOOCOMMERCE
   const handleCheckout = () => {
-    if (!config.wojewodztwo && !selectedWojewodztwoKeyBackendFallback) {
-      if (!wojewodztwo) {
-        alert("Proszę wybrać województwo przed przejściem do realizacji zamówienia.");
-        return;
-      }
+    if (!wojewodztwo) {
+      alert("Proszę wybrać województwo przed przejściem do realizacji zamówienia.");
+      return;
     }
 
-    // Tworzenie ukrytego wirtualnego formularza HTML
+    // Wyciągamy czytelną nazwę koloru ścian do tytułu produktu
+    const wallColorData = dbColors.find((c: any) => c.id === config.wallColor) || { label: 'Standard' };
+    const garageCustomName = `Garaż Blaszany ${config.width}x${config.length} cm - ${wallColorData.label}`;
+
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = appData.storeUrl || window.location.origin;
-    form.target = '_parent'; // Słowo kluczowe: zmusza okno główne WordPress do nawigacji
+    form.target = '_parent';
 
     const fields = {
       custom_garage_checkout: '1',
       garage_price: calculatedPrice.toString(),
       garage_config: JSON.stringify(config),
       garage_wojewodztwo: wojewodztwo,
-      garage_dynamic_addons: activeAddonsText
+      garage_dynamic_addons: activeAddonsText,
+      garage_custom_name: garageCustomName
     };
 
     Object.entries(fields).forEach(([key, value]) => {
@@ -572,7 +572,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <Smartphone size={18} /> {isGeneratingAR ? 'Generowanie pakietu...' : 'Zobacz Garaż w AR (Na żywo)'}
         </button>
 
-        {/* PODPIĘTA INTEGRACJA Z KOSZYKIEM WOOCOMMERCE */}
         <button 
           onClick={handleCheckout}
           className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer"
