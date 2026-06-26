@@ -75,14 +75,18 @@ export default function Home() {
 
     if (storeUrl) setWpAdminUrl(`${decodeURIComponent(storeUrl).replace(/\/$/, "")}/wp-admin/admin.php?page=garage-orders`);
 
+    let parsedAppData = null;
     if (initDataRaw) {
       try {
         const decodedJson = decodeURIComponent(escape(window.atob(decodeURIComponent(initDataRaw))));
-        const payload = JSON.parse(decodedJson);
-        setAppData(payload);
-        if (!savedConfigBase64) setConfig(prev => ({ ...prev, width: payload.baseConfig.w, length: payload.baseConfig.l, height: payload.baseConfig.h }));
-      } catch (e: any) { setAppData(FALLBACK_DATA); }
-    } else if (!savedConfigBase64) {
+        parsedAppData = JSON.parse(decodedJson);
+        setAppData(parsedAppData);
+      } catch (e: any) { 
+        parsedAppData = FALLBACK_DATA;
+        setAppData(FALLBACK_DATA); 
+      }
+    } else {
+      parsedAppData = FALLBACK_DATA;
       setAppData(FALLBACK_DATA);
     }
 
@@ -90,10 +94,12 @@ export default function Home() {
       try {
         const decoded = atob(decodeURIComponent(savedConfigBase64));
         const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decoded, c => c.charCodeAt(0)));
-        setConfig(JSON.parse(utf8));
+        const loadedConfig = JSON.parse(utf8);
+        setConfig(loadedConfig);
         setIsReadOnly(true);
-        if (!appData) setAppData(FALLBACK_DATA); 
       } catch (e) { console.error(e); }
+    } else if (parsedAppData && !savedConfigBase64) {
+      setConfig(prev => ({ ...prev, width: parsedAppData.baseConfig.w, length: parsedAppData.baseConfig.l, height: parsedAppData.baseConfig.h }));
     }
   }, []);
 
@@ -118,6 +124,21 @@ export default function Home() {
   };
 
   if (!appData) return <div className="flex h-screen items-center justify-center bg-zinc-900"><div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"></div></div>;
+
+  // FUNKCJA RATUJĄCA STARE KOLORY: Szuka po nowym ID lub bazowym (przed "_")
+  const getColorLabel = (colorId: string) => {
+    if (!appData || !appData.colors || !colorId) return 'Brak';
+    
+    let c = appData.colors.find((col: any) => col.id === colorId);
+    
+    // Jeśli nie znalazł, ale stare ID miało cyferki (np. zloty-dab_45) szuka po samej nazwie
+    if (!c && colorId.includes('_')) {
+      const baseId = colorId.split('_')[0];
+      c = appData.colors.find((col: any) => col.id === baseId || col.id.startsWith(baseId));
+    }
+    
+    return c ? c.label : 'Standardowy';
+  };
 
   return (
     <>
@@ -175,7 +196,6 @@ export default function Home() {
 
         <div className={`w-full flex flex-col bg-white border-l border-zinc-200 shadow-[-4px_0_25px_rgba(0,0,0,0.05)] relative z-10 ${isReadOnly ? 'md:w-[35%] h-full' : 'h-[60vh] md:h-full md:w-[40%]'}`}>
           
-          {/* WSKAŹNIK KROKÓW */}
           {!isReadOnly && (
             <div className="p-4 bg-white border-b border-zinc-100 hidden md:block">
               <div className="flex items-center justify-between relative">
@@ -206,9 +226,19 @@ export default function Home() {
                 </div>
                 <div>
                   <h3 className="text-xs font-black text-[var(--theme)] uppercase tracking-widest mb-4">Materiały i Wykończenie</h3>
-                  <ul className="space-y-3">
-                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-3 rounded-xl shadow-sm"><span className="text-sm font-bold text-zinc-600">Poszycie Ścian</span><div className="flex items-center gap-2"><span className="font-bold text-zinc-900">{config.wallProfile}</span></div></li>
-                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-3 rounded-xl shadow-sm"><span className="text-sm font-bold text-zinc-600">Rodzaj Dachu</span><div className="flex items-center gap-2"><span className="font-bold text-zinc-900">{config.roofProfile} ({config.roofType})</span></div></li>
+                  <ul className="space-y-2">
+                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Poszycie Ścian</span><span className="text-sm font-bold text-zinc-900">{config.wallProfile}</span></li>
+                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Rodzaj Dachu</span><span className="text-sm font-bold text-zinc-900">{config.roofProfile} ({config.roofType})</span></li>
+                    
+                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm mt-4"><span className="text-xs font-bold text-zinc-600">Kolor Ścian</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.wallColor)}</span></li>
+                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Kolor Dachu</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.roofColor)}</span></li>
+                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Kolor Bramy</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.gateColor)}</span></li>
+                    {config.elements.some(e => e.type === 'door') && (
+                      <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Kolor Drzwi</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.doorColor)}</span></li>
+                    )}
+                    {(config.gutters || config.extraOptions?.some(o => o.toLowerCase().includes('rynn'))) && (
+                      <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Kolor Rynien</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.gutterColor)}</span></li>
+                    )}
                   </ul>
                 </div>
                 <div>
