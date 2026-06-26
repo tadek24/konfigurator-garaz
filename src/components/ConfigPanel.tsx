@@ -33,7 +33,7 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
 
 const RoofIcon = ({ type }: { type: RoofType }) => {
   return (
-    <svg viewBox="0 0 100 100" className="w-12 h-12 mb-2 text-[var(--theme)] opacity-90 group-hover:scale-110 transition-transform">
+    <svg viewBox="0 0 100 100" className="w-14 h-14 mb-2 text-[var(--theme)] opacity-90 group-hover:scale-110 transition-transform">
       {type === 'dual-slope' && <path d="M50 20 L90 50 L90 80 L10 80 L10 50 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
       {type === 'slope-back' && <path d="M10 30 L90 50 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
       {type === 'slope-front' && <path d="M10 50 L90 30 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
@@ -45,6 +45,8 @@ const RoofIcon = ({ type }: { type: RoofType }) => {
 
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData, isGeneratingAR, setIsGeneratingAR }: ConfigPanelProps) {
   const [activeColorEdit, setActiveColorEdit] = useState<string | null>(null);
+  // Stan przechowujący wybrane województwo
+  const [wojewodztwo, setWojewodztwo] = useState<string>("");
   
   const pricing = appData.pricing || {};
   const customAddons = appData.addons || [];
@@ -109,6 +111,56 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     const finalPrice = Math.round(sum * totalMultiplier);
     return isNaN(finalPrice) ? 0 : finalPrice;
   }, [config, pricing, customAddons, appData, dbColors]);
+
+  // Dynamiczne budowanie listy tekstowej wybranych akcesoriów do koszyka WooCommerce
+  const activeAddonsText = useMemo(() => {
+    const list: string[] = [];
+    if (config.gutters) list.push("Rynny i rury spustowe");
+    if (config.extraOptions?.includes('cornerFlashings')) list.push("Obróbki narożne ściany");
+    if (config.extraOptions?.includes('roofFlashings')) list.push("Obróbki krawędzi dachu");
+    
+    (config.extraOptions || []).forEach(addonId => {
+      const addon = customAddons.find((a: any) => a.id === addonId);
+      if (addon) list.push(addon.label);
+    });
+    return list.join(", ");
+  }, [config, customAddons]);
+
+  // FUNKCJA NADZORUJĄCA PRZEKIEROWANIE DO KOSZYKA WOOCOMMERCE
+  const handleCheckout = () => {
+    if (!config.wojewodztwo && !selectedWojewodztwoKeyBackendFallback) {
+      if (!wojewodztwo) {
+        alert("Proszę wybrać województwo przed przejściem do realizacji zamówienia.");
+        return;
+      }
+    }
+
+    // Tworzenie ukrytego wirtualnego formularza HTML
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = appData.storeUrl || window.location.origin;
+    form.target = '_parent'; // Słowo kluczowe: zmusza okno główne WordPress do nawigacji
+
+    const fields = {
+      custom_garage_checkout: '1',
+      garage_price: calculatedPrice.toString(),
+      garage_config: JSON.stringify(config),
+      garage_wojewodztwo: wojewodztwo,
+      garage_dynamic_addons: activeAddonsText
+    };
+
+    Object.entries(fields).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = value;
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+  };
 
   const updateConfig = <K extends keyof GarageConfig>(key: K, value: GarageConfig[K]) => {
     setConfig(prev => {
@@ -175,7 +227,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
-  // SYSTEM KOLEJNOŚCI GRUP KOLORÓW
   const sortedGroupedColors = useMemo(() => {
     const groups = dbColors.reduce((acc: any, c: any) => {
       const group = c.type || 'Inne';
@@ -447,7 +498,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                       {sortedGroupedColors.map(([groupName, colorsList]) => (
                         <div key={groupName as string}>
                           <h5 className="font-bold text-[10px] mb-3 text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-2">{groupName as string}</h5>
-                          {/* SIATKA KOLORÓW - Wiele kolumn dla oszczędności miejsca */}
                           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                             {(colorsList as any[]).map((c: any) => {
                               const isSelected = config[item.key as keyof GarageConfig] === c.id;
@@ -498,8 +548,14 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
         <div className="flex flex-col gap-2 mb-4">
           <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
-          <select className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2" style={{accentColor: 'var(--theme)'}} required >
-            <option value="" disabled selected>Wybierz z listy...</option>
+          <select 
+            value={wojewodztwo}
+            onChange={(e) => setWojewodztwo(e.target.value)}
+            className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2" 
+            style={{accentColor: 'var(--theme)'}} 
+            required 
+          >
+            <option value="" disabled>Wybierz z listy...</option>
             {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
           </select>
         </div>
@@ -516,7 +572,11 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <Smartphone size={18} /> {isGeneratingAR ? 'Generowanie pakietu...' : 'Zobacz Garaż w AR (Na żywo)'}
         </button>
 
-        <button className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer">
+        {/* PODPIĘTA INTEGRACJA Z KOSZYKIEM WOOCOMMERCE */}
+        <button 
+          onClick={handleCheckout}
+          className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer"
+        >
           Kupuję i płacę
         </button>
       </div>
