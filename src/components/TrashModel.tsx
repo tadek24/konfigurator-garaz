@@ -210,17 +210,18 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
     });
   };
 
-  const getLouversSubtractions = (wallW: number, wallMaxH: number) => {
+  const getLouversSubtractions = (wallW: number, wallMaxH: number, isSide = false) => {
     const subs = [];
     const lamellaH = 0.10;
     const gapH = 0.03;
     const step = lamellaH + gapH;
     let i = 0;
+    const posX = isSide ? -wallW / 2 : 0;
     // Wycinamy szpary co `step` poczynając od wysokości 10cm.
     for (let y = lamellaH; y < wallMaxH; y += step) {
       subs.push(
-        <Subtraction key={`gap-${i++}`} position={[0, y + gapH / 2, t / 2]}>
-          <boxGeometry args={[wallW + 1, gapH, t * 4]} />
+        <Subtraction key={`gap-${i++}`} position={[posX, y + gapH / 2, t / 2]}>
+          <boxGeometry args={[20, gapH, t * 4]} />
         </Subtraction>
       );
     }
@@ -243,7 +244,7 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
             <extrudeGeometry args={[shape, wallExtrude]} />
           </Base>
           {getElementSubtractions(wallType, isSide, isLeftWall)}
-          {getLouversSubtractions(wallW, h + slopeH + 0.5)}
+          {getLouversSubtractions(wallW, h + slopeH + 0.5, isSide)}
         </Geometry>
         {wallMat}
       </mesh>
@@ -306,10 +307,10 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
       <ContactShadows resolution={1024} scale={25} blur={2.5} opacity={0.7} far={10} color="#000000" position={[0, 0, 0]} />
       
       <group>
-        {renderAzurowaWall('front', frontShape, [0, 0, l/2 - t/2], 0, false, false, w)}
-        {renderAzurowaWall('back', backShape, [0, 0, -l/2 + t/2], Math.PI, false, false, w)}
-        {renderAzurowaWall('left', leftSideShape, [-w/2 + t/2, 0, -l/2 + t], -Math.PI/2, true, true, l - 2*t)}
-        {renderAzurowaWall('right', rightSideShape, [w/2 - t/2, 0, l/2 - t], Math.PI/2, true, false, l - 2*t)}
+        {renderAzurowaWall('front', frontShape, [0, 0, l / 2 - t], 0, false, false, w)}
+        {renderAzurowaWall('back', backShape, [0, 0, -l / 2 + t], Math.PI, false, false, w)}
+        {renderAzurowaWall('left', leftSideShape, [-w / 2, 0, l / 2 - t], Math.PI / 2, true, true, l - 2 * t)}
+        {renderAzurowaWall('right', rightSideShape, [w / 2 - t, 0, l / 2 - t], Math.PI / 2, true, false, l - 2 * t)}
         
         {renderElements()}
         {renderRoof()}
