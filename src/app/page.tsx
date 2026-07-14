@@ -5,6 +5,7 @@ import { GarageConfig, WallFace } from '@/types';
 import ConfigPanel from '@/components/ConfigPanel';
 import CarportConfigPanel from '@/components/CarportConfigPanel';
 import PergolaConfigPanel from '@/components/PergolaConfigPanel';
+import TrashConfigPanel from '@/components/TrashConfigPanel';
 import { v4 as uuidv4 } from 'uuid';
 import dynamic from 'next/dynamic';
 import { Eye, X } from 'lucide-react';
@@ -22,6 +23,7 @@ const LoadingFallback = () => (
 const CanvasArea = dynamic(() => import('@/components/CanvasArea'), { ssr: false, loading: LoadingFallback });
 const CarportCanvasArea = dynamic(() => import('@/components/CarportCanvasArea'), { ssr: false, loading: LoadingFallback });
 const PergolaCanvasArea = dynamic(() => import('@/components/PergolaCanvasArea'), { ssr: false, loading: LoadingFallback });
+const TrashCanvasArea = dynamic(() => import('@/components/TrashCanvasArea'), { ssr: false, loading: LoadingFallback });
 
 const INITIAL_CONFIG: GarageConfig = {
   width: 300, length: 500, height: 210,
@@ -155,6 +157,8 @@ export default function Home() {
             <CarportCanvasArea config={config} selectedWall={selectedWall} colors={appData?.colors || []} isGeneratingAR={isGeneratingAR} onExportAR={handleExportAR} />
           ) : appData?.activeType === 'pergola' ? (
             <PergolaCanvasArea config={config} selectedWall={selectedWall} colors={appData?.colors || []} isGeneratingAR={isGeneratingAR} onExportAR={handleExportAR} />
+          ) : appData?.activeType === 'trash' ? (
+            <TrashCanvasArea config={config} selectedWall={selectedWall} activeDimId={activeDimId} colors={appData?.colors || []} isGeneratingAR={isGeneratingAR} onExportAR={handleExportAR} />
           ) : (
             <CanvasArea 
               config={config} 
@@ -245,6 +249,8 @@ export default function Home() {
                 <CarportConfigPanel config={config} setConfig={setConfig} appData={appData} />
               ) : appData?.activeType === 'pergola' ? (
                 <PergolaConfigPanel config={config} setConfig={setConfig} appData={appData} />
+              ) : appData?.activeType === 'trash' ? (
+                <TrashConfigPanel config={config} setConfig={setConfig} selectedWall={selectedWall} setSelectedWall={setSelectedWall} appData={appData} isGeneratingAR={isGeneratingAR} setIsGeneratingAR={setIsGeneratingAR} />
               ) : (
                 <ConfigPanel 
                   config={config} 

@@ -78,9 +78,9 @@ export default function CarportModel({ config, colors = [] }: CarportModelProps)
       roofShape.closePath();
       return (
         <group position={[0, h, -rL / 2]}>
-          <mesh castShadow receiveShadow>
-            <extrudeGeometry args={[roofShape, { depth: rL, bevelEnabled: false }]} />
-            <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} />
+          <mesh castShadow receiveShadow frustumCulled={false}>
+            <extrudeGeometry args={[roofShape, { depth: rL, bevelEnabled: false }]} onUpdate={(self) => { self.computeBoundingBox(); self.computeBoundingSphere(); }} />
+            <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
             <meshStandardMaterial attach="material-1"
               map={isRoofWood ? woodColor : trapezTex}
               normalMap={isRoofWood ? woodNormal : undefined}
@@ -90,6 +90,7 @@ export default function CarportModel({ config, colors = [] }: CarportModelProps)
               metalness={isRoofWood ? 0.0 : 0.6}
               envMapIntensity={1.5}
               side={THREE.DoubleSide}
+              shadowSide={THREE.DoubleSide}
             />
           </mesh>
           {showGutters && (
@@ -126,10 +127,10 @@ export default function CarportModel({ config, colors = [] }: CarportModelProps)
 
     return (
       <group>
-        <mesh position={[xOffset, h + slopeH / 2 + t / 2, zOffset]} rotation={[roofRotX, 0, roofRotZ]} castShadow receiveShadow>
-          <boxGeometry args={[rW, t, rL]} />
-          <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} />
-          <meshStandardMaterial attach="material-1" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} />
+        <mesh position={[xOffset, h + slopeH / 2 + t / 2, zOffset]} rotation={[roofRotX, 0, roofRotZ]} castShadow receiveShadow frustumCulled={false}>
+          <boxGeometry args={[rW, t, rL]} onUpdate={(self) => { self.computeBoundingBox(); self.computeBoundingSphere(); }} />
+          <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
+          <meshStandardMaterial attach="material-1" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
           <meshStandardMaterial attach="material-2" 
             map={isRoofWood ? woodColor : trapezTex}
             normalMap={isRoofWood ? woodNormal : undefined}
@@ -138,10 +139,12 @@ export default function CarportModel({ config, colors = [] }: CarportModelProps)
             roughness={isRoofWood ? 0.7 : 0.4}
             metalness={isRoofWood ? 0.0 : 0.6}
             envMapIntensity={1.5}
+            side={THREE.DoubleSide}
+            shadowSide={THREE.DoubleSide}
           />
-          <meshStandardMaterial attach="material-3" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} />
-          <meshStandardMaterial attach="material-4" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} />
-          <meshStandardMaterial attach="material-5" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} />
+          <meshStandardMaterial attach="material-3" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
+          <meshStandardMaterial attach="material-4" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
+          <meshStandardMaterial attach="material-5" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
           {showGutters && gutterMesh}
         </mesh>
       </group>
