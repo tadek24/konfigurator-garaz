@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState, useEffect } from 'react';
-import { GarageConfig, GarageElement } from '@/types';
+import { GarageConfig, GarageElement, WallFace } from '@/types';
 import * as THREE from 'three';
 import { Environment, ContactShadows, useTexture } from '@react-three/drei';
+import { Geometry, Base, Subtraction } from '@react-three/csg';
 
 interface TrashModelProps {
   config: GarageConfig;
@@ -23,13 +24,12 @@ function resolveColor(colorId: string | undefined, colors: any[] = []): { hex: s
 }
 
 export default function TrashModel({ config, colors = [] }: TrashModelProps) {
-  // Wymiary w metrach
   const w = config.width / 100;
   const l = config.length / 100;
   const h = config.height / 100;
 
-  const t = 0.05; // grubość dachu
-  const slopeH = 0.4; // wysokość spadu dachu
+  const t = 0.05; 
+  const slopeH = 0.4; 
 
   const [trapezTex] = useTexture(['/textures/trapez.jpg']);
   const [woodNormal] = useTexture(['/textures/drewno-normal.jpg']);
@@ -64,7 +64,7 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
   const isRight = config.roofType === 'slope-right';
 
   const renderRoof = () => {
-    const gutterMat = <meshStandardMaterial color="#3b3b3c" roughness={0.6} metalness={0.55} />;
+    const gutterMat = <meshStandardMaterial color="#3b3b3c" roughness={0.6} metalness={0.55} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />;
     const rL = l + 0.4; 
     const rW = w + 0.4; 
 
@@ -79,7 +79,7 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
       return (
         <group position={[0, h, -rL / 2]}>
           <mesh castShadow receiveShadow frustumCulled={false}>
-            <extrudeGeometry args={[roofShape, { depth: rL, bevelEnabled: false }]} />
+            <extrudeGeometry args={[roofShape, { depth: rL, bevelEnabled: false }]} onUpdate={(self) => { self.computeBoundingBox(); self.computeBoundingSphere(); }} />
             <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
             <meshStandardMaterial attach="material-1"
               map={isRoofWood ? woodColor : trapezTex}
@@ -128,7 +128,7 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
     return (
       <group>
         <mesh position={[xOffset, h + slopeH / 2 + t / 2, zOffset]} rotation={[roofRotX, 0, roofRotZ]} castShadow receiveShadow frustumCulled={false}>
-          <boxGeometry args={[rW, t, rL]} />
+          <boxGeometry args={[rW, t, rL]} onUpdate={(self) => { self.computeBoundingBox(); self.computeBoundingSphere(); }} />
           <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
           <meshStandardMaterial attach="material-1" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
           <meshStandardMaterial attach="material-2" 
@@ -151,180 +151,104 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
     );
   };
 
-  // --- LOGIKA AŻUROWYCH ŚCIAN (LAMEL) ---
+  // --- LOGIKA ŚCIAN Z CSG (LAMELKI) ---
   const { hex: wallHex, isWood: isWallWood } = resolveColor(config.wallColor, colors);
   const wallMat = <meshStandardMaterial 
     color={isWallWood ? '#ffffff' : wallHex} 
     map={isWallWood ? woodColor : undefined}
     roughness={0.8} 
     metalness={isWallWood ? 0.0 : 0.2} 
+    side={THREE.DoubleSide}
+    shadowSide={THREE.DoubleSide}
   />;
 
-  const lamellaH = 0.10; // 10 cm wysokości
-  const lamellaGap = 0.03; // 3 cm szpary
-  const lamellaStep = lamellaH + lamellaGap;
-  const lamellaDepth = 0.02; // 2 cm grubości listwy
+  let hFL = h, hFR = h, hBL = h, hBR = h;
+  if (isDual) { hFL = h; hFR = h; hBL = h; hBR = h; } 
+  else if (isFront) { hBL = h + slopeH; hBR = h + slopeH; } 
+  else if (isBack) { hFL = h + slopeH; hFR = h + slopeH; } 
+  else if (isLeft) { hFR = h + slopeH; hBR = h + slopeH; } 
+  else if (isRight) { hFL = h + slopeH; hBL = h + slopeH; }
 
-  const renderWallLouvers = (wallType: 'front' | 'back' | 'left' | 'right') => {
-    let wallWidth = wallType === 'front' || wallType === 'back' ? w : l;
-    let elements = config.elements.filter(e => e.wall === wallType);
-    let yMax = h;
-    
-    // Obliczanie wyższych ścian dla spadu dachu
-    if (isDual) {
-      if (wallType === 'front' || wallType === 'back') yMax = h + slopeH;
-    } else if (isFront) {
-      if (wallType === 'front') yMax = h + slopeH;
-      else if (wallType === 'left' || wallType === 'right') yMax = h + slopeH;
-    } else if (isBack) {
-      if (wallType === 'back') yMax = h + slopeH;
-      else if (wallType === 'left' || wallType === 'right') yMax = h + slopeH;
-    } else if (isLeft) {
-      if (wallType === 'left') yMax = h + slopeH;
-      else if (wallType === 'front' || wallType === 'back') yMax = h + slopeH;
-    } else if (isRight) {
-      if (wallType === 'right') yMax = h + slopeH;
-      else if (wallType === 'front' || wallType === 'back') yMax = h + slopeH;
-    }
-
-    const louvers = [];
-    
-    for (let y = 0.05; y < yMax; y += lamellaStep) {
-      // Dla ścian bocznych przy spadach jednostronnych musimy przyciąć lamellę jeśli wystaje poza trójkąt spadu.
-      // Dla uproszczenia, obetniemy lamellę lub zmniejszymy jej szerokość,
-      // ale najprościej wyrenderować ją prosto z odpowiednim docięciem - lub olać ścisłe docięcie,
-      // ponieważ lamelki schowają się pod dachem (lub delikatnie wystąpią co można ukryć).
-      // Zróbmy prosty podział:
-
-      let segments = [{ start: -wallWidth / 2, end: wallWidth / 2 }];
-      
-      // Wycinanie otworów na bramy/drzwi
-      for (const el of elements) {
-        const elW = el.width / 100;
-        const elH = el.height / 100;
-        const elX = el.x / 100;
-        const elY = el.y / 100;
-        
-        // Czy lamella przecina ten element w osi Y?
-        if (y + lamellaH/2 > elY && y - lamellaH/2 < elY + elH) {
-          // Lamella przecina otwór - musimy ją przeciąć
-          const elStart = elX - elW / 2;
-          const elEnd = elX + elW / 2;
-          
-          const newSegments = [];
-          for (const seg of segments) {
-            if (elStart > seg.start && elEnd < seg.end) {
-              // Element w środku segmentu - dzielimy na dwa
-              newSegments.push({ start: seg.start, end: elStart });
-              newSegments.push({ start: elEnd, end: seg.end });
-            } else if (elStart <= seg.start && elEnd >= seg.end) {
-              // Element przykrywa cały segment - usuwamy
-            } else if (elStart <= seg.start && elEnd > seg.start && elEnd < seg.end) {
-              // Element ucina lewą stronę segmentu
-              newSegments.push({ start: elEnd, end: seg.end });
-            } else if (elStart > seg.start && elStart < seg.end && elEnd >= seg.end) {
-              // Element ucina prawą stronę segmentu
-              newSegments.push({ start: seg.start, end: elStart });
-            } else {
-              // Element nie przecina segmentu
-              newSegments.push(seg);
-            }
-          }
-          segments = newSegments;
-        }
-      }
-
-      // Docinanie skosów (bardzo proste przybliżenie by nie wystawały ponad dach)
-      let effectiveY = y + lamellaH/2;
-      let renderSegments = segments;
-
-      // Generowanie meshy dla obliczonych segmentów
-      for (let i = 0; i < renderSegments.length; i++) {
-        const seg = renderSegments[i];
-        const segW = seg.end - seg.start;
-        if (segW > 0.01) {
-          const segX = seg.start + segW / 2;
-          
-          // Wyliczamy pozycje i rotacje dla poszczególnych ścian
-          let pos: [number, number, number] = [0, 0, 0];
-          let rot: [number, number, number] = [0, 0, 0];
-          
-          if (wallType === 'front') { pos = [segX, y, l/2]; }
-          if (wallType === 'back') { pos = [-segX, y, -l/2]; rot = [0, Math.PI, 0]; }
-          if (wallType === 'left') { pos = [-w/2, y, -segX]; rot = [0, -Math.PI/2, 0]; }
-          if (wallType === 'right') { pos = [w/2, y, segX]; rot = [0, Math.PI/2, 0]; }
-
-          // Jeśli to skos dachu, ukrywamy lamellę jeśli jej środek wystaje ponad dach 
-          // (lub skalujemy ją, ale ukrycie jest prostsze i daje kaskadowy efekt schodków).
-          let isOverRoof = false;
-          if (isDual) {
-             if (wallType === 'front' || wallType === 'back') {
-                const distFromCenter = Math.abs(segX);
-                const roofHAtX = h + slopeH - (distFromCenter / (w/2)) * slopeH;
-                if (effectiveY > roofHAtX) isOverRoof = true;
-             }
-          } else if (isFront) {
-             if (wallType === 'left' || wallType === 'right') {
-                const zNorm = wallType === 'left' ? (-segX + l/2)/l : (segX + l/2)/l;
-                const roofHAtZ = h + zNorm * slopeH;
-                if (effectiveY > roofHAtZ) isOverRoof = true;
-             } else if (wallType === 'front') {
-                if (effectiveY > h + slopeH) isOverRoof = true;
-             }
-          } else if (isBack) {
-             if (wallType === 'left' || wallType === 'right') {
-                const zNorm = wallType === 'left' ? (-segX + l/2)/l : (segX + l/2)/l;
-                const roofHAtZ = h + (1 - zNorm) * slopeH;
-                if (effectiveY > roofHAtZ) isOverRoof = true;
-             } else if (wallType === 'back') {
-                if (effectiveY > h + slopeH) isOverRoof = true;
-             }
-          } else if (isLeft) {
-             if (wallType === 'front' || wallType === 'back') {
-                const xNorm = wallType === 'front' ? (segX + w/2)/w : (-segX + w/2)/w;
-                const roofHAtX = h + (1 - xNorm) * slopeH;
-                if (effectiveY > roofHAtX) isOverRoof = true;
-             } else if (wallType === 'left') {
-                if (effectiveY > h + slopeH) isOverRoof = true;
-             }
-          } else if (isRight) {
-             if (wallType === 'front' || wallType === 'back') {
-                const xNorm = wallType === 'front' ? (segX + w/2)/w : (-segX + w/2)/w;
-                const roofHAtX = h + xNorm * slopeH;
-                if (effectiveY > roofHAtX) isOverRoof = true;
-             } else if (wallType === 'right') {
-                if (effectiveY > h + slopeH) isOverRoof = true;
-             }
-          }
-
-          if (!isOverRoof) {
-            louvers.push(
-              <mesh key={`louver-${wallType}-${y}-${i}`} position={pos} rotation={rot} castShadow receiveShadow>
-                <boxGeometry args={[segW, lamellaH, lamellaDepth]} />
-                {wallMat}
-              </mesh>
-            );
-          }
-        }
-      }
-    }
-    
-    return <group key={`wall-${wallType}`}>{louvers}</group>;
+  const createFBShape = (leftH: number, rightH: number, isTri = false) => {
+    const shape = new THREE.Shape();
+    const halfW = w / 2; 
+    shape.moveTo(-halfW, 0); 
+    shape.lineTo( halfW, 0);
+    shape.lineTo( halfW, rightH);
+    if (isTri) shape.lineTo(0, rightH + slopeH);
+    shape.lineTo(-halfW, leftH);
+    shape.closePath();
+    return shape;
   };
-  
-  // Renderujemy również podstawowe słupy nośne w narożnikach
-  const renderCornerPillars = () => {
-     const pillarSize = 0.08; // 8x8 cm
-     const pH = h;
-     return (
-       <group>
-         <mesh position={[-w/2 + pillarSize/2, pH/2, l/2 - pillarSize/2]} castShadow receiveShadow><boxGeometry args={[pillarSize, pH, pillarSize]}/>{wallMat}</mesh>
-         <mesh position={[w/2 - pillarSize/2, pH/2, l/2 - pillarSize/2]} castShadow receiveShadow><boxGeometry args={[pillarSize, pH, pillarSize]}/>{wallMat}</mesh>
-         <mesh position={[-w/2 + pillarSize/2, pH/2, -l/2 + pillarSize/2]} castShadow receiveShadow><boxGeometry args={[pillarSize, pH, pillarSize]}/>{wallMat}</mesh>
-         <mesh position={[w/2 - pillarSize/2, pH/2, -l/2 + pillarSize/2]} castShadow receiveShadow><boxGeometry args={[pillarSize, pH, pillarSize]}/>{wallMat}</mesh>
-       </group>
-     )
-  }
+
+  const createSideShape = (frontH: number, rearH: number) => {
+    const shape = new THREE.Shape();
+    const sideL = l - 2 * t;
+    shape.moveTo(0, 0);
+    shape.lineTo(sideL, 0);
+    shape.lineTo(sideL, rearH);
+    shape.lineTo(0, frontH);
+    shape.closePath();
+    return shape;
+  };
+
+  const wallExtrude = { depth: t, bevelEnabled: false };
+  const frontShape = createFBShape(hFL, hFR, isDual);
+  const backShape = createFBShape(hBR, hBL, isDual);
+  const leftSideShape  = createSideShape(hFL, hBL);
+  const rightSideShape = createSideShape(hFR, hBR);
+
+  const getElementSubtractions = (wall: WallFace, isSide = false, isLeftWall = false) => {
+    return (config.elements || []).filter(e => e.wall === wall).map((el, i) => {
+      let xShape = (el.x || 0) * 0.01;
+      if (isSide) xShape = isLeftWall ? ((l - 2*t) / 2 - (el.x || 0) * 0.01) : ((l - 2*t) / 2 + (el.x || 0) * 0.01);
+      return (
+        <Subtraction key={`el-${i}`} position={[xShape, (el.y || 0) * 0.01 + ((el.height || 0) * 0.01) / 2, t / 2]}>
+          <boxGeometry args={[(el.width || 0) * 0.01, (el.height || 0) * 0.01, t * 4]} />
+        </Subtraction>
+      );
+    });
+  };
+
+  const getLouversSubtractions = (wallW: number, wallMaxH: number) => {
+    const subs = [];
+    const lamellaH = 0.10;
+    const gapH = 0.03;
+    const step = lamellaH + gapH;
+    let i = 0;
+    // Wycinamy szpary co `step` poczynając od wysokości 10cm.
+    for (let y = lamellaH; y < wallMaxH; y += step) {
+      subs.push(
+        <Subtraction key={`gap-${i++}`} position={[0, y + gapH / 2, t / 2]}>
+          <boxGeometry args={[wallW + 1, gapH, t * 4]} />
+        </Subtraction>
+      );
+    }
+    return subs;
+  };
+
+  const renderAzurowaWall = (
+    wallType: WallFace, 
+    shape: THREE.Shape, 
+    pos: [number, number, number], 
+    rotY: number, 
+    isSide = false, 
+    isLeftWall = false,
+    wallW: number
+  ) => {
+    return (
+      <mesh position={pos} rotation={[0, rotY, 0]} castShadow receiveShadow>
+        <Geometry computeVertexNormals>
+          <Base position={[isSide ? -wallW/2 : 0, 0, -t / 2]}>
+            <extrudeGeometry args={[shape, wallExtrude]} />
+          </Base>
+          {getElementSubtractions(wallType, isSide, isLeftWall)}
+          {getLouversSubtractions(wallW, h + slopeH + 0.5)}
+        </Geometry>
+        {wallMat}
+      </mesh>
+    );
+  };
 
   // --- ELEMENTY (BRAMY, DRZWI) ---
   const renderElements = () => {
@@ -342,7 +266,6 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
       if (el.wall === 'left') { pos = [-w/2, elY + elH/2, -elX]; rot = [0, -Math.PI/2, 0]; }
       if (el.wall === 'right') { pos = [w/2, elY + elH/2, elX]; rot = [0, Math.PI/2, 0]; }
 
-      // Prosta reprezentacja bramy/drzwi w wiacie śmietnikowej
       const { hex: gateHex, isWood: isGateWood } = resolveColor(el.type === 'gate' ? config.gateColor : config.doorColor, colors);
       const elMat = <meshStandardMaterial 
         color={isGateWood ? '#ffffff' : gateHex} 
@@ -383,11 +306,10 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
       <ContactShadows resolution={1024} scale={25} blur={2.5} opacity={0.7} far={10} color="#000000" position={[0, 0, 0]} />
       
       <group>
-        {renderCornerPillars()}
-        {renderWallLouvers('front')}
-        {renderWallLouvers('back')}
-        {renderWallLouvers('left')}
-        {renderWallLouvers('right')}
+        {renderAzurowaWall('front', frontShape, [0, 0, l/2 - t/2], 0, false, false, w)}
+        {renderAzurowaWall('back', backShape, [0, 0, -l/2 + t/2], Math.PI, false, false, w)}
+        {renderAzurowaWall('left', leftSideShape, [-w/2 + t/2, 0, -l/2 + t], -Math.PI/2, true, true, l - 2*t)}
+        {renderAzurowaWall('right', rightSideShape, [w/2 - t/2, 0, l/2 - t], Math.PI/2, true, false, l - 2*t)}
         
         {renderElements()}
         {renderRoof()}

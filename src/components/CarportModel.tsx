@@ -167,25 +167,25 @@ export default function CarportModel({ config, colors = [] }: CarportModelProps)
   // Wysokość słupów zależna od dachu (by dociąć do spadu)
   // W uproszczeniu, zróbmy słupy dochodzące do podstawy dachu (h) i dodajmy ew. skos
   const renderPillar = (x: number, z: number) => {
-    // Oblicz wysokość w danym punkcie z w zależności od spadu
     let pillarH = h;
     if (isFront) {
-      // przód wyżej, tył niżej?
-      // w GarageModel slopeH to dodatek do tyłu/przodu.
-      // u nas h to podstawa, a dach idzie od h do h+slopeH
-      const progressZ = (z + l/2) / l; // od 0 do 1
-      pillarH = h + progressZ * slopeH;
-    } else if (isBack) {
+      // Spad w przód: z = l/2 (przód) to h, z = -l/2 (tył) to h + slopeH
       const progressZ = 1 - (z + l/2) / l; 
       pillarH = h + progressZ * slopeH;
+    } else if (isBack) {
+      // Spad w tył: z = -l/2 (tył) to h, z = l/2 (przód) to h + slopeH
+      const progressZ = (z + l/2) / l; 
+      pillarH = h + progressZ * slopeH;
     } else if (isLeft) {
+      // Spad w lewo: x = -w/2 (lewo) to h, x = w/2 (prawo) to h + slopeH
       const progressX = (x + w/2) / w; 
       pillarH = h + progressX * slopeH;
     } else if (isRight) {
+      // Spad w prawo: x = w/2 (prawo) to h, x = -w/2 (lewo) to h + slopeH
       const progressX = 1 - (x + w/2) / w; 
       pillarH = h + progressX * slopeH;
     } else if (isDual) {
-      // na krawędziach bocznych (gdzie są słupy, wysokość to po prostu h)
+      // Przy dachu dwuspadowym krawędzie boczne mają bazową wysokość h
       pillarH = h;
     }
     
