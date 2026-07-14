@@ -82,9 +82,13 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
       const ridgeY = h + slopeH + liftY; 
       const eavesY = h + liftY - Math.tan(roofTheta)*oX;
 
-      const fasciaMat = <meshStandardMaterial color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />;
-      const mainMat = (
+      const renderFasciaMat = (attachName: string) => (
+        <meshStandardMaterial attach={attachName} color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
+      );
+
+      const renderMainMat = (attachName: string) => (
         <meshStandardMaterial 
+          attach={attachName}
           map={isRoofWood ? woodColor : trapezTex}
           normalMap={isRoofWood ? woodNormal : undefined}
           normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined}
@@ -102,23 +106,23 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
           <group position={[0, ridgeY, 0]} rotation={[0, 0, roofTheta]} frustumCulled={false}>
             <mesh position={[-(paneLen/2 - overlap/2), 0, 0]} castShadow receiveShadow frustumCulled={false}>
               <boxGeometry args={[paneLen, t, rL]} />
-              <primitive object={fasciaMat} attach="material-0" />
-              <primitive object={fasciaMat} attach="material-1" />
-              <primitive object={mainMat} attach="material-2" />
-              <primitive object={fasciaMat} attach="material-3" />
-              <primitive object={fasciaMat} attach="material-4" />
-              <primitive object={fasciaMat} attach="material-5" />
+              {renderFasciaMat("material-0")}
+              {renderFasciaMat("material-1")}
+              {renderMainMat("material-2")}
+              {renderFasciaMat("material-3")}
+              {renderFasciaMat("material-4")}
+              {renderFasciaMat("material-5")}
             </mesh>
           </group>
           <group position={[0, ridgeY, 0]} rotation={[0, 0, -roofTheta]} frustumCulled={false}>
             <mesh position={[(paneLen/2 - overlap/2), 0, 0]} castShadow receiveShadow frustumCulled={false}>
               <boxGeometry args={[paneLen, t, rL]} />
-              <primitive object={fasciaMat} attach="material-0" />
-              <primitive object={fasciaMat} attach="material-1" />
-              <primitive object={mainMat} attach="material-2" />
-              <primitive object={fasciaMat} attach="material-3" />
-              <primitive object={fasciaMat} attach="material-4" />
-              <primitive object={fasciaMat} attach="material-5" />
+              {renderFasciaMat("material-0")}
+              {renderFasciaMat("material-1")}
+              {renderMainMat("material-2")}
+              {renderFasciaMat("material-3")}
+              {renderFasciaMat("material-4")}
+              {renderFasciaMat("material-5")}
             </mesh>
           </group>
           {showGutters && (
