@@ -216,7 +216,7 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
     const gapH = 0.03;
     const step = lamellaH + gapH;
     let i = 0;
-    const posX = isSide ? -wallW / 2 : 0;
+    const posX = isSide ? wallW / 2 : 0;
     // Wycinamy szpary co `step` poczynając od wysokości 10cm.
     for (let y = lamellaH; y < wallMaxH; y += step) {
       subs.push(
@@ -240,7 +240,7 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
     return (
       <mesh position={pos} rotation={[0, rotY, 0]} castShadow receiveShadow>
         <Geometry computeVertexNormals>
-          <Base position={[isSide ? -wallW/2 : 0, 0, -t / 2]}>
+          <Base>
             <extrudeGeometry args={[shape, wallExtrude]} />
           </Base>
           {getElementSubtractions(wallType, isSide, isLeftWall)}
