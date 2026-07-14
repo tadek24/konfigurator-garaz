@@ -72,34 +72,62 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
     const roofFasciaColor = roofHex;
 
     if (isDual) {
-      const roofShape = new THREE.Shape();
-      roofShape.moveTo(-rW / 2, 0); roofShape.lineTo(0, slopeH); roofShape.lineTo( rW / 2, 0);
-      roofShape.lineTo( rW / 2, t); roofShape.lineTo(0, slopeH + t); roofShape.lineTo(-rW / 2, t);
-      roofShape.closePath();
+      const oX = 0.2;
+      const roofTheta = Math.atan2(slopeH, w/2);
+      const halfRoofW = w/2 + oX;
+      const overlap = 0.08; 
+      const paneLen = halfRoofW / Math.cos(roofTheta) + overlap;
+      
+      const liftY = (t/2) / Math.cos(roofTheta); 
+      const ridgeY = h + slopeH + liftY; 
+      const eavesY = h + liftY - Math.tan(roofTheta)*oX;
+
+      const fasciaMat = <meshStandardMaterial color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />;
+      const mainMat = (
+        <meshStandardMaterial 
+          map={isRoofWood ? woodColor : trapezTex}
+          normalMap={isRoofWood ? woodNormal : undefined}
+          normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined}
+          color={isRoofWood ? '#ffffff' : roofFasciaColor}
+          roughness={isRoofWood ? 0.7 : 0.4}
+          metalness={isRoofWood ? 0.0 : 0.6}
+          envMapIntensity={1.5}
+          side={THREE.DoubleSide}
+          shadowSide={THREE.DoubleSide}
+        />
+      );
+
       return (
-        <group position={[0, h, -rL / 2]}>
-          <mesh castShadow receiveShadow frustumCulled={false}>
-            <extrudeGeometry args={[roofShape, { depth: rL, bevelEnabled: false }]} onUpdate={(self) => { self.computeBoundingBox(); self.computeBoundingSphere(); }} />
-            <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
-            <meshStandardMaterial attach="material-1"
-              map={isRoofWood ? woodColor : trapezTex}
-              normalMap={isRoofWood ? woodNormal : undefined}
-              normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined}
-              color={isRoofWood ? '#ffffff' : roofFasciaColor}
-              roughness={isRoofWood ? 0.7 : 0.4}
-              metalness={isRoofWood ? 0.0 : 0.6}
-              envMapIntensity={1.5}
-              side={THREE.DoubleSide}
-              shadowSide={THREE.DoubleSide}
-            />
-          </mesh>
+        <group frustumCulled={false}>
+          <group position={[0, ridgeY, 0]} rotation={[0, 0, roofTheta]} frustumCulled={false}>
+            <mesh position={[-(paneLen/2 - overlap/2), 0, 0]} castShadow receiveShadow frustumCulled={false}>
+              <boxGeometry args={[paneLen, t, rL]} />
+              <primitive object={fasciaMat} attach="material-0" />
+              <primitive object={fasciaMat} attach="material-1" />
+              <primitive object={mainMat} attach="material-2" />
+              <primitive object={fasciaMat} attach="material-3" />
+              <primitive object={fasciaMat} attach="material-4" />
+              <primitive object={fasciaMat} attach="material-5" />
+            </mesh>
+          </group>
+          <group position={[0, ridgeY, 0]} rotation={[0, 0, -roofTheta]} frustumCulled={false}>
+            <mesh position={[(paneLen/2 - overlap/2), 0, 0]} castShadow receiveShadow frustumCulled={false}>
+              <boxGeometry args={[paneLen, t, rL]} />
+              <primitive object={fasciaMat} attach="material-0" />
+              <primitive object={fasciaMat} attach="material-1" />
+              <primitive object={mainMat} attach="material-2" />
+              <primitive object={fasciaMat} attach="material-3" />
+              <primitive object={fasciaMat} attach="material-4" />
+              <primitive object={fasciaMat} attach="material-5" />
+            </mesh>
+          </group>
           {showGutters && (
-            <>
-              <mesh position={[-rW / 2 + 0.1, t / 2, rL / 2]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
-              <mesh position={[ rW / 2 - 0.1, t / 2, rL / 2]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
-              <mesh position={[-rW / 2 + 0.1, -h / 2, 0]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh>
-              <mesh position={[ rW / 2 - 0.1, -h / 2, 0]}><cylinderGeometry args={[0.04, 0.04, h]} />{gutterMat}</mesh>
-            </>
+            <group frustumCulled={false}>
+              <mesh position={[-w/2 - oX, eavesY - 0.01, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow frustumCulled={false}><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
+              <mesh position={[ w/2 + oX, eavesY - 0.01, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow frustumCulled={false}><cylinderGeometry args={[0.05, 0.05, rL]} />{gutterMat}</mesh>
+              <mesh position={[-w/2 - oX + 0.035, eavesY/2, -l/2 - 0.2 + 0.05]} castShadow frustumCulled={false}><cylinderGeometry args={[0.04, 0.04, eavesY]} />{gutterMat}</mesh>
+              <mesh position={[ w/2 + oX - 0.035, eavesY/2, -l/2 - 0.2 + 0.05]} castShadow frustumCulled={false}><cylinderGeometry args={[0.04, 0.04, eavesY]} />{gutterMat}</mesh>
+            </group>
           )}
         </group>
       );
@@ -110,25 +138,25 @@ export default function TrashModel({ config, colors = [] }: TrashModelProps) {
 
     if (isFront) {
       roofRotX = Math.atan2(slopeH, l);
-      gutterMesh = <mesh position={[0, -0.02, rL / 2]} rotation={[0, 0, Math.PI / 2]} castShadow><cylinderGeometry args={[0.06, 0.06, rW]} />{gutterMat}</mesh>;
+      gutterMesh = <mesh position={[0, -0.02, rL / 2]} rotation={[0, 0, Math.PI / 2]} castShadow frustumCulled={false}><cylinderGeometry args={[0.06, 0.06, rW]} />{gutterMat}</mesh>;
     } else if (isBack) {
       roofRotX = -Math.atan2(slopeH, l);
-      gutterMesh = <mesh position={[0, -0.02, -rL / 2]} rotation={[0, 0, Math.PI / 2]} castShadow><cylinderGeometry args={[0.06, 0.06, rW]} />{gutterMat}</mesh>;
+      gutterMesh = <mesh position={[0, -0.02, -rL / 2]} rotation={[0, 0, Math.PI / 2]} castShadow frustumCulled={false}><cylinderGeometry args={[0.06, 0.06, rW]} />{gutterMat}</mesh>;
     } else if (isLeft) {
       roofRotZ = Math.atan2(slopeH, w);
-      gutterMesh = <mesh position={[-rW / 2, -0.02, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.06, 0.06, rL]} />{gutterMat}</mesh>;
+      gutterMesh = <mesh position={[-rW / 2, -0.02, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow frustumCulled={false}><cylinderGeometry args={[0.06, 0.06, rL]} />{gutterMat}</mesh>;
     } else if (isRight) {
       roofRotZ = -Math.atan2(slopeH, w);
-      gutterMesh = <mesh position={[rW / 2, -0.02, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.06, 0.06, rL]} />{gutterMat}</mesh>;
+      gutterMesh = <mesh position={[rW / 2, -0.02, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow frustumCulled={false}><cylinderGeometry args={[0.06, 0.06, rL]} />{gutterMat}</mesh>;
     }
 
     const zOffset = isFront ? -(t / 2) * Math.sin(roofRotX) : (isBack ? (t / 2) * Math.sin(Math.abs(roofRotX)) : 0);
     const xOffset = isLeft ? (t / 2) * Math.sin(roofRotZ) : (isRight ? -(t / 2) * Math.sin(Math.abs(roofRotZ)) : 0);
 
     return (
-      <group>
+      <group frustumCulled={false}>
         <mesh position={[xOffset, h + slopeH / 2 + t / 2, zOffset]} rotation={[roofRotX, 0, roofRotZ]} castShadow receiveShadow frustumCulled={false}>
-          <boxGeometry args={[rW, t, rL]} onUpdate={(self) => { self.computeBoundingBox(); self.computeBoundingSphere(); }} />
+          <boxGeometry args={[rW, t, rL]} />
           <meshStandardMaterial attach="material-0" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
           <meshStandardMaterial attach="material-1" color={roofFasciaColor} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} shadowSide={THREE.DoubleSide} />
           <meshStandardMaterial attach="material-2" 
