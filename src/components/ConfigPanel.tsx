@@ -31,9 +31,10 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
+// CAŁKOWICIE PŁASKIE, ZABEZPIECZONE IKONY SVG
 const RoofIcon = ({ type }: { type: RoofType }) => {
   return (
-    <svg viewBox="0 0 100 100" className="w-14 h-14 mb-2 text-[var(--theme)] opacity-90 group-hover:scale-110 transition-transform">
+    <svg viewBox="0 0 100 100" className="w-12 h-12 mb-2 text-[var(--theme)] opacity-90 group-hover:scale-110 transition-transform">
       {type === 'dual-slope' && <path d="M50 20 L90 50 L90 80 L10 80 L10 50 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
       {type === 'slope-back' && <path d="M10 30 L90 50 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
       {type === 'slope-front' && <path d="M10 50 L90 30 L90 80 L10 80 Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>}
@@ -45,11 +46,14 @@ const RoofIcon = ({ type }: { type: RoofType }) => {
 
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData, isGeneratingAR, setIsGeneratingAR }: ConfigPanelProps) {
   const [activeColorEdit, setActiveColorEdit] = useState<string | null>(null);
-  const [wojewodztwo, setWojewodztwo] = useState<string>("");
   
   const pricing = appData.pricing || {};
   const customAddons = appData.addons || [];
   const dbColors = appData.colors || [];
+
+  const matColors = dbColors.filter((c: any) => c.type === 'mat');
+  const gladkieColors = dbColors.filter((c: any) => c.type === 'gladkie');
+  const drewnoColors = dbColors.filter((c: any) => c.type === 'drewno');
 
   const getColorData = (id: string) => dbColors.find((c: any) => c.id === id) || { hex: '#d4d4d4', label: 'Wybierz', texture: '' };
 
@@ -58,109 +62,66 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     return isNaN(num) ? 0 : num;
   };
 
-  const formatPriceLabel = (type: string, val: any) => {
-    const v = safeNum(val);
-    if (type === 'fixed') return `+${v} zł`;
-    if (type === 'pct_base') return `+${v}% (baza)`;
-    if (type === 'pct_total' || type === 'pct') return `+${v}% (suma)`;
-    return `+${v}`;
-  };
-
   const calculatedPrice = useMemo(() => {
-    const basePrice = safeNum(appData.baseConfig?.p); 
-    let sum = basePrice;
-    let totalMultiplier = 1;
+    let total = safeNum(appData.baseConfig?.p); 
+    let percentMultiplier = 1;
     
-    const applyPrice = (type: string, val: number, count: number = 1) => {
-      if (type === 'fixed') sum += val * count;
-      else if (type === 'pct_base') sum += basePrice * (val / 100) * count;
-      else if (type === 'pct_total' || type === 'pct') totalMultiplier += (val / 100) * count;
-    };
-
     const baseArea = (safeNum(appData.baseConfig?.w) / 100) * (safeNum(appData.baseConfig?.l) / 100);
     const currentArea = (config.width / 100) * (config.length / 100);
     const extraArea = Math.max(0, currentArea - baseArea); 
     
-    if (extraArea > 0 && safeNum(pricing.sqm_v) > 0) applyPrice(pricing.sqm_t, safeNum(pricing.sqm_v), extraArea);
+    if (extraArea > 0 && safeNum(pricing.sqm_v) > 0) {
+      if (pricing.sqm_t === 'fixed') total += (extraArea * safeNum(pricing.sqm_v));
+      else percentMultiplier += (extraArea * safeNum(pricing.sqm_v) / 100);
+    }
 
     const doorsCount = config.elements.filter(e => e.type === 'door').length;
     const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
     const skylightsCount = config.elements.filter(e => e.type === 'skylight').length;
     
-    if (doorsCount > 0) applyPrice(pricing.door_t, safeNum(pricing.door_v), doorsCount);
-    if (windowsCount > 0) applyPrice(pricing.window_t, safeNum(pricing.window_v), windowsCount);
-    if (skylightsCount > 0) applyPrice(pricing.skylight_t, safeNum(pricing.skylight_v), skylightsCount);
+    if (pricing.door_t === 'fixed') total += (doorsCount * safeNum(pricing.door_v));
+    else percentMultiplier += (doorsCount * safeNum(pricing.door_v) / 100);
 
-    if (config.gutters) applyPrice(pricing.gutter_t, safeNum(pricing.gutter_v));
-    if (config.extraOptions?.includes('cornerFlashings')) applyPrice(pricing.flash_corner_t, safeNum(pricing.flash_corner_v));
-    if (config.extraOptions?.includes('roofFlashings')) applyPrice(pricing.flash_roof_t, safeNum(pricing.flash_roof_v));
+    if (pricing.window_t === 'fixed') total += (windowsCount * safeNum(pricing.window_v));
+    else percentMultiplier += (windowsCount * safeNum(pricing.window_v) / 100);
 
+    if (pricing.skylight_t === 'fixed') total += (skylightsCount * safeNum(pricing.skylight_v));
+    else percentMultiplier += (skylightsCount * safeNum(pricing.skylight_v) / 100);
+
+    if (config.gutters) {
+      if (pricing.gutter_t === 'fixed') total += safeNum(pricing.gutter_v);
+      if (pricing.gutter_t === 'pct') percentMultiplier += (safeNum(pricing.gutter_v) / 100);
+    }
+
+    if (config.extraOptions?.includes('cornerFlashings')) {
+      if (pricing.flash_corner_t === 'fixed') total += safeNum(pricing.flash_corner_v);
+      if (pricing.flash_corner_t === 'pct') percentMultiplier += (safeNum(pricing.flash_corner_v) / 100);
+    }
+
+    if (config.extraOptions?.includes('roofFlashings')) {
+      if (pricing.flash_roof_t === 'fixed') total += safeNum(pricing.flash_roof_v);
+      if (pricing.flash_roof_t === 'pct') percentMultiplier += (safeNum(pricing.flash_roof_v) / 100);
+    }
+
+    let customAddonTotal = 0;
     (config.extraOptions || []).forEach(addonId => {
       const addon = customAddons.find((a: any) => a.id === addonId);
-      if (addon) applyPrice(addon.type, safeNum(addon.price));
+      if (addon) {
+        if (addon.type === 'fixed') customAddonTotal += safeNum(addon.price);
+        if (addon.type === 'pct') percentMultiplier += (safeNum(addon.price) / 100);
+      }
     });
 
     const activeColors = [config.wallColor, config.roofColor, config.gateColor, config.cornerFlashingColor, config.roofFlashingColor, config.gutterColor];
     const uniquePremiumColors = Array.from(new Set(activeColors));
     uniquePremiumColors.forEach(cId => {
        const c = dbColors.find((col: any) => col.id === cId);
-       if (c && safeNum(c.price) > 0) sum += safeNum(c.price);
+       if (c && safeNum(c.price) > 0) total += safeNum(c.price);
     });
 
-    const finalPrice = Math.round(sum * totalMultiplier);
+    const finalPrice = Math.round((total * percentMultiplier) + customAddonTotal);
     return isNaN(finalPrice) ? 0 : finalPrice;
   }, [config, pricing, customAddons, appData, dbColors]);
-
-  const activeAddonsText = useMemo(() => {
-    const list: string[] = [];
-    if (config.gutters) list.push("Rynny i rury spustowe");
-    if (config.extraOptions?.includes('cornerFlashings')) list.push("Obróbki narożne ściany");
-    if (config.extraOptions?.includes('roofFlashings')) list.push("Obróbki krawędzi dachu");
-    
-    (config.extraOptions || []).forEach(addonId => {
-      const addon = customAddons.find((a: any) => a.id === addonId);
-      if (addon) list.push(addon.label);
-    });
-    return list.join(", ");
-  }, [config, customAddons]);
-
-  // FUNKCJA NADZORUJĄCA PRZEKIEROWANIE DO KOSZYKA WOOCOMMERCE
-  const handleCheckout = () => {
-    if (!wojewodztwo) {
-      alert("Proszę wybrać województwo przed przejściem do realizacji zamówienia.");
-      return;
-    }
-
-    // Wyciągamy czytelną nazwę koloru ścian do tytułu produktu
-    const wallColorData = dbColors.find((c: any) => c.id === config.wallColor) || { label: 'Standard' };
-    const garageCustomName = `Garaż Blaszany ${config.width}x${config.length} cm - ${wallColorData.label}`;
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = appData.storeUrl || window.location.origin;
-    form.target = '_parent';
-
-    const fields = {
-      custom_garage_checkout: '1',
-      garage_price: calculatedPrice.toString(),
-      garage_config: JSON.stringify(config),
-      garage_wojewodztwo: wojewodztwo,
-      garage_dynamic_addons: activeAddonsText,
-      garage_custom_name: garageCustomName
-    };
-
-    Object.entries(fields).forEach(([key, value]) => {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = key;
-      input.value = value;
-      form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
-  };
 
   const updateConfig = <K extends keyof GarageConfig>(key: K, value: GarageConfig[K]) => {
     setConfig(prev => {
@@ -178,6 +139,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   const handleColorSelect = (colorId: string) => {
     if (!activeColorEdit) return;
+    
     if (config.applyColorToAll) {
       setConfig(prev => ({
         ...prev,
@@ -227,25 +189,57 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
-  const sortedGroupedColors = useMemo(() => {
-    const groups = dbColors.reduce((acc: any, c: any) => {
-      const group = c.type || 'Inne';
-      if (!acc[group]) acc[group] = [];
-      acc[group].push(c);
-      return acc;
-    }, {});
+  const ColorSelectionModal = () => (
+    <div className="mt-4 p-4 bg-white border-2 border-zinc-200 rounded-xl shadow-inner">
+      <div className="flex justify-between items-center mb-4 border-b pb-2">
+        <h4 className="font-bold text-zinc-900">Wybierz kolor</h4>
+        <button onClick={() => setActiveColorEdit(null)} className="text-zinc-400 hover:text-red-500 font-bold">✕ Zamknij</button>
+      </div>
 
-    const orderStr = appData.colorGroupsOrder || 'Matowe, Drewnopodobne, Gładkie';
-    const orderArr = orderStr.split(',').map((s: string) => s.trim().toLowerCase());
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <h5 className="font-bold text-sm mb-3">Matowe:</h5>
+          <div className="space-y-2">
+            {matColors.map((c: any) => (
+              <button key={c.id} onClick={() => handleColorSelect(c.id)} className="w-full flex items-center gap-3 p-1.5 hover:bg-zinc-100 rounded-lg transition-colors">
+                <div className="w-8 h-8 rounded border shadow-sm" style={{backgroundColor: c.hex}}></div>
+                <span className="text-xs font-medium text-left">{c.label} {safeNum(c.price) > 0 ? `(+${c.price}zł)` : ''}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <h5 className="font-bold text-sm mb-3">Gładkie:</h5>
+          <div className="space-y-2">
+            {gladkieColors.map((c: any) => (
+              <button key={c.id} onClick={() => handleColorSelect(c.id)} className="w-full flex items-center gap-3 p-1.5 hover:bg-zinc-100 rounded-lg transition-colors">
+                <div className="w-8 h-8 rounded border shadow-sm" style={{backgroundColor: c.hex}}></div>
+                <span className="text-xs font-medium text-left">{c.label} {safeNum(c.price) > 0 ? `(+${c.price}zł)` : ''}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
-    return Object.entries(groups).sort(([groupA], [groupB]) => {
-      let idxA = orderArr.indexOf(groupA.toLowerCase());
-      let idxB = orderArr.indexOf(groupB.toLowerCase());
-      if (idxA === -1) idxA = 999;
-      if (idxB === -1) idxB = 999;
-      return idxA - idxB;
-    });
-  }, [dbColors, appData.colorGroupsOrder]);
+      {drewnoColors.length > 0 && (
+        <div className="mt-6 border-t pt-4">
+          <h5 className="font-bold text-sm mb-3">Drewnopodobne:</h5>
+          <div className="grid grid-cols-2 gap-2">
+            {drewnoColors.map((c: any) => (
+              <button key={c.id} onClick={() => handleColorSelect(c.id)} className="flex items-center gap-3 p-1.5 hover:bg-zinc-100 rounded-lg transition-colors">
+                {c.texture ? (
+                  <div className="w-8 h-8 rounded border shadow-sm bg-cover bg-center" style={{backgroundImage: `url(${c.texture})`}}></div>
+                ) : (
+                  <div className="w-8 h-8 rounded border shadow-sm" style={{backgroundColor: c.hex}}></div>
+                )}
+                <span className="text-xs font-medium text-left">{c.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="pb-12">
@@ -346,7 +340,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Drzwi</button>
           <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Okno</button>
-          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik z Pleksy</button>
+          <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik (Lufcik)</button>
         </div>
         <div className="space-y-3">
           {config.elements.filter(e => e.wall === selectedWall && e.type !== 'gate').length === 0 ? (
@@ -387,7 +381,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <span className="text-sm font-semibold text-zinc-700">Rynny i rury spustowe</span>
             </div>
             <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              {formatPriceLabel(pricing.gutter_t, pricing.gutter_v)}
+              {pricing.gutter_t === 'pct' ? `+${safeNum(pricing.gutter_v)}%` : `+${safeNum(pricing.gutter_v)} zł`}
             </span>
           </label>
 
@@ -397,7 +391,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <span className="text-sm font-semibold text-zinc-700">Obróbki narożne ściany</span>
             </div>
             <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              {formatPriceLabel(pricing.flash_corner_t, pricing.flash_corner_v)}
+              {pricing.flash_corner_t === 'pct' ? `+${safeNum(pricing.flash_corner_v)}%` : `+${safeNum(pricing.flash_corner_v)} zł`}
             </span>
           </label>
 
@@ -407,7 +401,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <span className="text-sm font-semibold text-zinc-700">Obróbki krawędzi dachu</span>
             </div>
             <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              {formatPriceLabel(pricing.flash_roof_t, pricing.flash_roof_v)}
+              {pricing.flash_roof_t === 'pct' ? `+${safeNum(pricing.flash_roof_v)}%` : `+${safeNum(pricing.flash_roof_v)} zł`}
             </span>
           </label>
 
@@ -419,7 +413,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                   <input type="checkbox" checked={isActive} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), opt.id] : (config.extraOptions || []).filter(x => x !== opt.id); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)]" />
                   <span className="text-sm font-semibold text-zinc-700">{opt.label}</span>
                 </div>
-                <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">{formatPriceLabel(opt.type, opt.price)}</span>
+                <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">{opt.type === 'pct' ? `+${safeNum(opt.price)}%` : `+${safeNum(opt.price)} zł`}</span>
               </label>
             );
           })}
@@ -458,8 +452,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <div className="p-4 flex items-center justify-between border-b border-zinc-800">
             <h3 className="font-bold tracking-widest flex items-center gap-2"><PaintBucket size={16}/> KOLORY GARAŻU</h3>
           </div>
-          
-          <div className="p-2">
+          <div className="p-2 space-y-1">
             {[
               { label: 'Kolor ścian', key: 'wallColor' },
               { label: 'Brama', key: 'gateColor' },
@@ -469,70 +462,35 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               { label: 'Obróbki dachu', key: 'roofFlashingColor' },
             ].map((item) => {
               const colorData = getColorData(config[item.key as keyof GarageConfig] as string);
-              const isEditing = activeColorEdit === item.key;
-              
               return (
-                <div key={item.key} className="mb-1">
-                  <div 
-                    onClick={() => setActiveColorEdit(isEditing ? null : item.key)}
-                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${isEditing ? 'bg-zinc-800 border border-zinc-700' : 'hover:bg-zinc-800 border border-transparent'}`}
-                  >
-                    <span className="text-sm font-medium text-zinc-300">{item.label}:</span>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        {colorData.texture ? (
-                          <div className="w-8 h-8 rounded bg-cover bg-center border border-zinc-600 shadow-md" style={{backgroundImage: `url(${colorData.texture})`}}></div>
-                        ) : (
-                          <div className="w-8 h-8 rounded border border-zinc-600 shadow-md" style={{backgroundColor: colorData.hex}}></div>
-                        )}
-                        <span className="text-xs font-bold w-24 leading-tight text-white">{colorData.label}</span>
-                      </div>
-                      <button className={`p-2 rounded transition-colors ${isEditing ? 'bg-[var(--theme)] text-white' : 'bg-zinc-700 text-zinc-300'}`}>
-                        <Edit2 size={14} />
-                      </button>
+                <div key={item.key} className="flex items-center justify-between p-3 rounded-lg hover:bg-zinc-800 transition-colors">
+                  <span className="text-sm font-medium text-zinc-300">{item.label}:</span>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      {colorData.texture ? (
+                        <div className="w-8 h-8 rounded bg-cover bg-center border border-zinc-600 shadow-md" style={{backgroundImage: `url(${colorData.texture})`}}></div>
+                      ) : (
+                        <div className="w-8 h-8 rounded border border-zinc-600 shadow-md" style={{backgroundColor: colorData.hex}}></div>
+                      )}
+                      <span className="text-xs font-bold w-24 leading-tight">{colorData.label}</span>
                     </div>
+                    <button 
+                      onClick={() => setActiveColorEdit(activeColorEdit === item.key ? null : item.key)}
+                      className={`p-2 rounded bg-zinc-800 border transition-colors ${activeColorEdit === item.key ? 'border-[var(--theme)] text-[var(--theme)]' : 'border-zinc-700 hover:border-zinc-500'}`}
+                    >
+                      <Edit2 size={14} />
+                    </button>
                   </div>
-
-                  {isEditing && (
-                    <div className="mt-1 mb-3 p-4 bg-[#131315] rounded-xl border border-zinc-800 shadow-inner flex flex-col gap-6">
-                      {sortedGroupedColors.map(([groupName, colorsList]) => (
-                        <div key={groupName as string}>
-                          <h5 className="font-bold text-[10px] mb-3 text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-2">{groupName as string}</h5>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                            {(colorsList as any[]).map((c: any) => {
-                              const isSelected = config[item.key as keyof GarageConfig] === c.id;
-                              return (
-                                <button 
-                                  key={c.id} 
-                                  onClick={(e) => { e.stopPropagation(); handleColorSelect(c.id); }} 
-                                  className={`flex items-center gap-3 p-2 rounded-lg transition-colors w-full text-left ${isSelected ? 'bg-zinc-800 ring-1 ring-[var(--theme)]' : 'hover:bg-zinc-800'}`}
-                                >
-                                  {c.texture ? (
-                                    <div className="w-6 h-6 rounded-full flex-none border border-zinc-600 bg-cover bg-center shadow-sm" style={{backgroundImage: `url(${c.texture})`}}></div>
-                                  ) : (
-                                    <div className="w-6 h-6 rounded-full flex-none border border-zinc-600 shadow-sm" style={{backgroundColor: c.hex}}></div>
-                                  )}
-                                  <span className={`text-[11px] font-medium leading-tight ${isSelected ? 'text-[var(--theme)]' : 'text-zinc-300'}`}>
-                                    {c.label} <span className="block opacity-60 font-normal">{safeNum(c.price) > 0 ? `(+${c.price}zł)` : ''}</span>
-                                  </span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}
-          </div>
-          
-          <div className="flex items-center justify-between p-3 rounded-lg hover:bg-zinc-800 transition-colors border-t border-zinc-800 m-2">
-            <span className="text-sm font-medium text-zinc-300">Ściągnięcie folii:</span>
-            <div className="flex items-center gap-4">
-              <span className="text-xs font-bold w-24 text-right text-zinc-400">{config.removeFoil ? 'Tak' : 'Nie'}</span>
-              <button onClick={() => updateConfig('removeFoil', !config.removeFoil)} className="p-2 rounded bg-zinc-800 border border-zinc-700 hover:border-[var(--theme)] hover:text-[var(--theme)] transition-colors"><Edit2 size={14} /></button>
+            
+            <div className="flex items-center justify-between p-3 rounded-lg hover:bg-zinc-800 transition-colors border-t border-zinc-800 mt-2">
+              <span className="text-sm font-medium text-zinc-300">Ściągnięcie folii:</span>
+              <div className="flex items-center gap-4">
+                <span className="text-xs font-bold w-24 text-right text-zinc-400">{config.removeFoil ? 'Tak' : 'Nie'}</span>
+                <button onClick={() => updateConfig('removeFoil', !config.removeFoil)} className="p-2 rounded bg-zinc-800 border border-zinc-700 hover:border-[var(--theme)] hover:text-[var(--theme)] transition-colors"><Edit2 size={14} /></button>
+              </div>
             </div>
           </div>
           
@@ -543,19 +501,15 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             </label>
           </div>
         </div>
+
+        {activeColorEdit && <ColorSelectionModal />}
       </Section>
       
       <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
         <div className="flex flex-col gap-2 mb-4">
           <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
-          <select 
-            value={wojewodztwo}
-            onChange={(e) => setWojewodztwo(e.target.value)}
-            className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2" 
-            style={{accentColor: 'var(--theme)'}} 
-            required 
-          >
-            <option value="" disabled>Wybierz z listy...</option>
+          <select className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2" style={{accentColor: 'var(--theme)'}} required >
+            <option value="" disabled selected>Wybierz z listy...</option>
             {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
           </select>
         </div>
@@ -564,6 +518,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <span className="text-3xl font-extrabold text-[var(--theme)]">{calculatedPrice} zł</span>
         </div>
         
+        {/* WYzwalacz Modelu AR */}
         <button 
           onClick={() => setIsGeneratingAR && setIsGeneratingAR(true)} 
           disabled={isGeneratingAR}
@@ -572,10 +527,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <Smartphone size={18} /> {isGeneratingAR ? 'Generowanie pakietu...' : 'Zobacz Garaż w AR (Na żywo)'}
         </button>
 
-        <button 
-          onClick={handleCheckout}
-          className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer"
-        >
+        <button className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer">
           Kupuję i płacę
         </button>
       </div>

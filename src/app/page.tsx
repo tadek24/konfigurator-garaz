@@ -3,6 +3,8 @@
 import React, { useState, UIEvent, useEffect } from 'react';
 import { GarageConfig, WallFace } from '@/types';
 import ConfigPanel from '@/components/ConfigPanel';
+import CarportConfigPanel from '@/components/CarportConfigPanel';
+import PergolaConfigPanel from '@/components/PergolaConfigPanel';
 import { v4 as uuidv4 } from 'uuid';
 import dynamic from 'next/dynamic';
 import { Eye, X } from 'lucide-react';
@@ -10,15 +12,16 @@ import Script from 'next/script';
 
 const ModelViewer = 'model-viewer' as any;
 
-const CanvasArea = dynamic(() => import('@/components/CanvasArea'), { 
-  ssr: false,
-  loading: () => (
-    <div className="flex flex-col items-center justify-center h-full w-full bg-zinc-900 text-orange-500">
-      <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="text-xs font-bold tracking-widest text-zinc-400 uppercase">Wczytywanie środowiska 3D...</p>
-    </div>
-  )
-});
+const LoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center h-full w-full bg-zinc-900 text-[var(--theme,orange)]">
+    <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin mb-4"></div>
+    <p className="text-xs font-bold tracking-widest text-zinc-400 uppercase">Wczytywanie środowiska 3D...</p>
+  </div>
+);
+
+const CanvasArea = dynamic(() => import('@/components/CanvasArea'), { ssr: false, loading: LoadingFallback });
+const CarportCanvasArea = dynamic(() => import('@/components/CarportCanvasArea'), { ssr: false, loading: LoadingFallback });
+const PergolaCanvasArea = dynamic(() => import('@/components/PergolaCanvasArea'), { ssr: false, loading: LoadingFallback });
 
 const INITIAL_CONFIG: GarageConfig = {
   width: 300, length: 500, height: 210,
@@ -75,42 +78,25 @@ export default function Home() {
 
     if (storeUrl) setWpAdminUrl(`${decodeURIComponent(storeUrl).replace(/\/$/, "")}/wp-admin/admin.php?page=garage-orders`);
 
-    let parsedAppData = null;
     if (initDataRaw) {
       try {
-        // SUPER-PANCERNE DEKODOWANIE DANYCH Z WORDPRESSA
-        // Zamienia ewentualne spacje na +, dekoduje Base64 i zmusza do bezpiecznego odczytu UTF-8
-        const base64Str = initDataRaw.replace(/ /g, '+');
-        const decodedStr = atob(base64Str);
-        const decodedJson = new TextDecoder("utf-8").decode(Uint8Array.from(decodedStr, c => c.charCodeAt(0)));
-        
-        parsedAppData = JSON.parse(decodedJson);
-        setAppData(parsedAppData);
-      } catch (e: any) { 
-        console.error("Błąd dekodowania bazy kolorów i cennika: ", e);
-        parsedAppData = FALLBACK_DATA;
-        setAppData(FALLBACK_DATA); 
-      }
-    } else {
-      parsedAppData = FALLBACK_DATA;
+        const decodedJson = decodeURIComponent(escape(window.atob(decodeURIComponent(initDataRaw))));
+        const payload = JSON.parse(decodedJson);
+        setAppData(payload);
+        if (!savedConfigBase64) setConfig(prev => ({ ...prev, width: payload.baseConfig.w, length: payload.baseConfig.l, height: payload.baseConfig.h }));
+      } catch (e: any) { setAppData(FALLBACK_DATA); }
+    } else if (!savedConfigBase64) {
       setAppData(FALLBACK_DATA);
     }
 
     if (savedConfigBase64) {
       try {
-        // Podobnie pancerne dekodowanie dla zapisanych projektów w archiwum
-        const base64StrConfig = savedConfigBase64.replace(/ /g, '+');
-        const decodedConfig = atob(base64StrConfig);
-        const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decodedConfig, c => c.charCodeAt(0)));
-        
-        const loadedConfig = JSON.parse(utf8);
-        setConfig(loadedConfig);
+        const decoded = atob(decodeURIComponent(savedConfigBase64));
+        const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decoded, c => c.charCodeAt(0)));
+        setConfig(JSON.parse(utf8));
         setIsReadOnly(true);
-      } catch (e) { 
-        console.error("Błąd wczytywania zapisanej konstrukcji: ", e); 
-      }
-    } else if (parsedAppData && !savedConfigBase64) {
-      setConfig(prev => ({ ...prev, width: parsedAppData.baseConfig.w, length: parsedAppData.baseConfig.l, height: parsedAppData.baseConfig.h }));
+        if (!appData) setAppData(FALLBACK_DATA); 
+      } catch (e) { console.error(e); }
     }
   }, []);
 
@@ -135,16 +121,6 @@ export default function Home() {
   };
 
   if (!appData) return <div className="flex h-screen items-center justify-center bg-zinc-900"><div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"></div></div>;
-
-  const getColorLabel = (colorId: string) => {
-    if (!appData || !appData.colors || !colorId) return 'Brak';
-    let c = appData.colors.find((col: any) => col.id === colorId);
-    if (!c && colorId.includes('_')) {
-      const baseId = colorId.split('_')[0];
-      c = appData.colors.find((col: any) => col.id === baseId || col.id.startsWith(baseId));
-    }
-    return c ? c.label : 'Standardowy';
-  };
 
   return (
     <>
@@ -175,14 +151,20 @@ export default function Home() {
 
       <main className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-zinc-50" style={{ '--theme': appData.themeColor } as React.CSSProperties}>
         <div className={`w-full relative bg-zinc-900 shadow-inner ${isReadOnly ? 'md:w-[65%] h-full' : 'h-[40vh] md:h-full md:w-[60%]'}`}>
-          <CanvasArea 
-            config={config} 
-            selectedWall={selectedWall} 
-            colors={appData?.colors || []} 
-            activeDimId={activeDimId}
-            isGeneratingAR={isGeneratingAR}
-            onExportAR={handleExportAR}
-          />
+          {appData?.activeType === 'carport' ? (
+            <CarportCanvasArea config={config} selectedWall={selectedWall} colors={appData?.colors || []} isGeneratingAR={isGeneratingAR} onExportAR={handleExportAR} />
+          ) : appData?.activeType === 'pergola' ? (
+            <PergolaCanvasArea config={config} selectedWall={selectedWall} colors={appData?.colors || []} isGeneratingAR={isGeneratingAR} onExportAR={handleExportAR} />
+          ) : (
+            <CanvasArea 
+              config={config} 
+              selectedWall={selectedWall} 
+              colors={appData?.colors || []} 
+              activeDimId={activeDimId}
+              isGeneratingAR={isGeneratingAR}
+              onExportAR={handleExportAR}
+            />
+          )}
           {isReadOnly && (
             <div className="absolute top-6 left-6 pointer-events-none z-10">
               <div className="bg-zinc-900/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-zinc-800 shadow-2xl">
@@ -202,6 +184,7 @@ export default function Home() {
 
         <div className={`w-full flex flex-col bg-white border-l border-zinc-200 shadow-[-4px_0_25px_rgba(0,0,0,0.05)] relative z-10 ${isReadOnly ? 'md:w-[35%] h-full' : 'h-[60vh] md:h-full md:w-[40%]'}`}>
           
+          {/* WSKAŹNIK KROKÓW */}
           {!isReadOnly && (
             <div className="p-4 bg-white border-b border-zinc-100 hidden md:block">
               <div className="flex items-center justify-between relative">
@@ -232,19 +215,9 @@ export default function Home() {
                 </div>
                 <div>
                   <h3 className="text-xs font-black text-[var(--theme)] uppercase tracking-widest mb-4">Materiały i Wykończenie</h3>
-                  <ul className="space-y-2">
-                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Poszycie Ścian</span><span className="text-sm font-bold text-zinc-900">{config.wallProfile}</span></li>
-                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Rodzaj Dachu</span><span className="text-sm font-bold text-zinc-900">{config.roofProfile} ({config.roofType})</span></li>
-                    
-                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm mt-4"><span className="text-xs font-bold text-zinc-600">Kolor Ścian</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.wallColor)}</span></li>
-                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Kolor Dachu</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.roofColor)}</span></li>
-                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Kolor Bramy</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.gateColor)}</span></li>
-                    {config.elements.some(e => e.type === 'door') && (
-                      <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Kolor Drzwi</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.doorColor)}</span></li>
-                    )}
-                    {(config.gutters || config.extraOptions?.some(o => o.toLowerCase().includes('rynn'))) && (
-                      <li className="flex justify-between items-center bg-white border border-zinc-200 p-2.5 rounded-xl shadow-sm"><span className="text-xs font-bold text-zinc-600">Kolor Rynien</span><span className="text-sm font-bold text-[var(--theme)]">{getColorLabel(config.gutterColor)}</span></li>
-                    )}
+                  <ul className="space-y-3">
+                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-3 rounded-xl shadow-sm"><span className="text-sm font-bold text-zinc-600">Poszycie Ścian</span><div className="flex items-center gap-2"><span className="font-bold text-zinc-900">{config.wallProfile}</span></div></li>
+                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-3 rounded-xl shadow-sm"><span className="text-sm font-bold text-zinc-600">Rodzaj Dachu</span><div className="flex items-center gap-2"><span className="font-bold text-zinc-900">{config.roofProfile} ({config.roofType})</span></div></li>
                   </ul>
                 </div>
                 <div>
@@ -268,15 +241,21 @@ export default function Home() {
             </>
           ) : (
             <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar scroll-smooth" onScroll={handleScroll}>
-              <ConfigPanel 
-                config={config} 
-                setConfig={setConfig} 
-                selectedWall={selectedWall} 
-                setSelectedWall={setSelectedWall} 
-                appData={appData} 
-                isGeneratingAR={isGeneratingAR} 
-                setIsGeneratingAR={setIsGeneratingAR} 
-              />
+              {appData?.activeType === 'carport' ? (
+                <CarportConfigPanel config={config} setConfig={setConfig} appData={appData} />
+              ) : appData?.activeType === 'pergola' ? (
+                <PergolaConfigPanel config={config} setConfig={setConfig} appData={appData} />
+              ) : (
+                <ConfigPanel 
+                  config={config} 
+                  setConfig={setConfig} 
+                  selectedWall={selectedWall} 
+                  setSelectedWall={setSelectedWall} 
+                  appData={appData} 
+                  isGeneratingAR={isGeneratingAR} 
+                  setIsGeneratingAR={setIsGeneratingAR} 
+                />
+              )}
             </div>
           )}
         </div>

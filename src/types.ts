@@ -26,8 +26,10 @@ export interface GarageConfig {
   gutters: boolean;
   elements: GarageElement[];
   extraOptions?: string[];
+  modulesCount?: number; // Używane w Pergoli
   
-  applyColorToAll: boolean;
+  // NOWY SYSTEM KOLORÓW I OBRÓBEK
+  applyColorToAll: boolean; // Checkbox "Zastosuj do wszystkich"
   removeFoil: boolean;
   
   wallProfile: SheetProfile;
