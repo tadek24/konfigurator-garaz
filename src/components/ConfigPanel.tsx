@@ -31,7 +31,6 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
-// CAŁKOWICIE PŁASKIE, ZABEZPIECZONE IKONY SVG
 const RoofIcon = ({ type }: { type: RoofType }) => {
   return (
     <svg viewBox="0 0 100 100" className="w-12 h-12 mb-2 text-[var(--theme)] opacity-90 group-hover:scale-110 transition-transform">
@@ -51,11 +50,9 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const customAddons = appData.addons || [];
   const dbColors = appData.colors || [];
 
-  // ZMIANA: Dynamiczne grupowanie kolorów bez twardych deklaracji
   const groupedColors = useMemo(() => {
     const groups: Record<string, any[]> = {};
     dbColors.forEach((c: any) => {
-      // Pobieramy nazwę grupy z bazy danych (wtyczki). Jeśli puste, wrzucamy do "Inne"
       const groupName = c.type ? c.type.trim() : 'Inne';
       if (!groups[groupName]) {
         groups[groupName] = [];
@@ -199,34 +196,34 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
-  // ZMIANA: Modal generujący sekcje na podstawie kluczy z bazy
-  const ColorSelectionModal = () => (
-    <div className="mt-4 p-4 bg-white border-2 border-zinc-200 rounded-xl shadow-inner">
-      <div className="flex justify-between items-center mb-4 border-b pb-2">
-        <h4 className="font-bold text-zinc-900">Wybierz kolor</h4>
-        <button onClick={() => setActiveColorEdit(null)} className="text-zinc-400 hover:text-red-500 font-bold">✕ Zamknij</button>
-      </div>
-
+  // NOWY: Komponent wyświetlający się pod konkretnym elementem w formie równej siatki
+  const InlineColorSelector = () => (
+    <div className="p-4 bg-zinc-950 border-t border-zinc-800 shadow-inner animate-in slide-in-from-top-2 duration-200">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {Object.entries(groupedColors).map(([groupName, colors]) => (
           <div key={groupName} className="mb-2">
-            <h5 className="font-bold text-sm mb-3 capitalize">{groupName}:</h5>
-            <div className="space-y-2">
+            <h5 className="font-bold text-xs mb-3 capitalize text-zinc-400 tracking-wider border-b border-zinc-800 pb-1">{groupName}:</h5>
+            <div className="grid grid-cols-2 lg:grid-cols-2 gap-2">
               {colors.map((c: any) => (
-                <button key={c.id} onClick={() => handleColorSelect(c.id)} className="w-full flex items-center gap-3 p-1.5 hover:bg-zinc-100 rounded-lg transition-colors border border-transparent hover:border-zinc-200">
+                <button key={c.id} onClick={() => handleColorSelect(c.id)} className="w-full flex items-center gap-3 p-2 hover:bg-zinc-800 rounded-lg transition-colors border border-zinc-800 hover:border-[var(--theme)]">
                   {c.texture ? (
-                    <div className="w-8 h-8 rounded border shadow-sm bg-cover bg-center shrink-0" style={{backgroundImage: `url(${c.texture})`}}></div>
+                    <div className="w-6 h-6 rounded border border-zinc-600 shadow-sm bg-cover bg-center shrink-0" style={{backgroundImage: `url(${c.texture})`}}></div>
                   ) : (
-                    <div className="w-8 h-8 rounded border shadow-sm shrink-0" style={{backgroundColor: c.hex}}></div>
+                    <div className="w-6 h-6 rounded border border-zinc-600 shadow-sm shrink-0" style={{backgroundColor: c.hex}}></div>
                   )}
-                  <span className="text-xs font-medium text-left">
-                    {c.label} {safeNum(c.price) > 0 ? <span className="text-[var(--theme)] font-bold block sm:inline mt-0.5 sm:mt-0 sm:ml-1">(+{c.price}zł)</span> : ''}
+                  <span className="text-xs font-medium text-left text-zinc-300">
+                    {c.label} {safeNum(c.price) > 0 ? <span className="text-[var(--theme)] font-bold block mt-0.5">(+{c.price}zł)</span> : ''}
                   </span>
                 </button>
               ))}
             </div>
           </div>
         ))}
+      </div>
+      <div className="mt-4 flex justify-end">
+        <button onClick={() => setActiveColorEdit(null)} className="text-xs font-bold text-zinc-400 hover:text-white px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 transition-colors">
+          Zamknij panel
+        </button>
       </div>
     </div>
   );
@@ -442,7 +439,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <div className="p-4 flex items-center justify-between border-b border-zinc-800">
             <h3 className="font-bold tracking-widest flex items-center gap-2"><PaintBucket size={16}/> KOLORY GARAŻU</h3>
           </div>
-          <div className="p-2 space-y-1">
+          <div className="p-2 flex flex-col">
             {[
               { label: 'Kolor ścian', key: 'wallColor' },
               { label: 'Brama', key: 'gateColor' },
@@ -452,26 +449,32 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               { label: 'Obróbki dachu', key: 'roofFlashingColor' },
             ].map((item) => {
               const colorData = getColorData(config[item.key as keyof GarageConfig] as string);
+              const isEditingThis = activeColorEdit === item.key;
+              
               return (
-                <div key={item.key} className="flex items-center justify-between p-3 rounded-lg hover:bg-zinc-800 transition-colors">
-                  <span className="text-sm font-medium text-zinc-300">{item.label}:</span>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      {colorData.texture ? (
-                        <div className="w-8 h-8 rounded bg-cover bg-center border border-zinc-600 shadow-md" style={{backgroundImage: `url(${colorData.texture})`}}></div>
-                      ) : (
-                        <div className="w-8 h-8 rounded border border-zinc-600 shadow-md" style={{backgroundColor: colorData.hex}}></div>
-                      )}
-                      <span className="text-xs font-bold w-24 leading-tight">{colorData.label}</span>
+                <React.Fragment key={item.key}>
+                  <div className={`flex items-center justify-between p-3 rounded-lg transition-colors ${isEditingThis ? 'bg-zinc-800' : 'hover:bg-zinc-800'}`}>
+                    <span className="text-sm font-medium text-zinc-300">{item.label}:</span>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        {colorData.texture ? (
+                          <div className="w-8 h-8 rounded bg-cover bg-center border border-zinc-600 shadow-md" style={{backgroundImage: `url(${colorData.texture})`}}></div>
+                        ) : (
+                          <div className="w-8 h-8 rounded border border-zinc-600 shadow-md" style={{backgroundColor: colorData.hex}}></div>
+                        )}
+                        <span className="text-xs font-bold w-24 leading-tight">{colorData.label}</span>
+                      </div>
+                      <button 
+                        onClick={() => setActiveColorEdit(isEditingThis ? null : item.key)}
+                        className={`p-2 rounded bg-zinc-800 border transition-colors ${isEditingThis ? 'border-[var(--theme)] text-[var(--theme)]' : 'border-zinc-700 hover:border-zinc-500'}`}
+                      >
+                        <Edit2 size={14} />
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => setActiveColorEdit(activeColorEdit === item.key ? null : item.key)}
-                      className={`p-2 rounded bg-zinc-800 border transition-colors ${activeColorEdit === item.key ? 'border-[var(--theme)] text-[var(--theme)]' : 'border-zinc-700 hover:border-zinc-500'}`}
-                    >
-                      <Edit2 size={14} />
-                    </button>
                   </div>
-                </div>
+                  {/* Wysuwane menu edycji bezposrednio pod rzedem */}
+                  {isEditingThis && <InlineColorSelector />}
+                </React.Fragment>
               );
             })}
             
@@ -491,8 +494,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             </label>
           </div>
         </div>
-
-        {activeColorEdit && <ColorSelectionModal />}
       </Section>
       
       <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
