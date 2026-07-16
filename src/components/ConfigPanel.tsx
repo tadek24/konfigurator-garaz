@@ -31,7 +31,6 @@ function Section({ title, icon, children, defaultOpen = true }: { title: string;
   );
 }
 
-// CAŁKOWICIE PŁASKIE, ZABEZPIECZONE IKONY SVG
 const RoofIcon = ({ type }: { type: RoofType }) => {
   return (
     <svg viewBox="0 0 100 100" className="w-12 h-12 mb-2 text-[var(--theme)] opacity-90 group-hover:scale-110 transition-transform">
@@ -51,16 +50,39 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const customAddons = appData.addons || [];
   const dbColors = appData.colors || [];
 
-  const matColors = dbColors.filter((c: any) => c.type === 'mat');
-  const gladkieColors = dbColors.filter((c: any) => c.type === 'gladkie');
-  const drewnoColors = dbColors.filter((c: any) => c.type === 'drewno');
-
   const getColorData = (id: string) => dbColors.find((c: any) => c.id === id) || { hex: '#d4d4d4', label: 'Wybierz', texture: '' };
 
   const safeNum = (val: any) => {
     const num = Number(val);
     return isNaN(num) ? 0 : num;
   };
+
+  // DYNAMICZNE GRUPOWANIE KOLORÓW PROSTO Z BAZY WORDPRESS
+  const groupedColors = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    dbColors.forEach((c: any) => {
+      const type = c.type ? c.type.trim() : 'Inne';
+      if (!groups[type]) groups[type] = [];
+      groups[type].push(c);
+    });
+
+    const orderStr = appData.colorGroupsOrder || '';
+    const orderArr = orderStr.split(',').map((s: string) => s.trim().toLowerCase());
+
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      const idxA = orderArr.indexOf(a.toLowerCase());
+      const idxB = orderArr.indexOf(b.toLowerCase());
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+
+    return sortedKeys.map(key => ({
+      label: key,
+      colors: groups[key]
+    }));
+  }, [dbColors, appData.colorGroupsOrder]);
 
   const calculatedPrice = useMemo(() => {
     let total = safeNum(appData.baseConfig?.p); 
@@ -189,55 +211,45 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
-  const ColorSelectionModal = () => (
-    <div className="mt-4 p-4 bg-white border-2 border-zinc-200 rounded-xl shadow-inner">
-      <div className="flex justify-between items-center mb-4 border-b pb-2">
-        <h4 className="font-bold text-zinc-900">Wybierz kolor</h4>
-        <button onClick={() => setActiveColorEdit(null)} className="text-zinc-400 hover:text-red-500 font-bold">✕ Zamknij</button>
+  // NOWY, ESTETYCZNY I DYNAMICZNY SELEKTOR KOLORÓW
+  const InlineColorSelector = () => (
+    <div className="mt-4 p-5 bg-zinc-50 border border-zinc-200 rounded-xl shadow-inner animate-in fade-in zoom-in duration-200">
+      <div className="flex justify-between items-center mb-4 border-b border-zinc-200 pb-3">
+        <h4 className="font-bold text-zinc-900 flex items-center gap-2">
+          <PaintBucket size={16} className="text-[var(--theme)]" /> 
+          Wybierz kolor dla: <span className="uppercase text-[var(--theme)]">{activeColorEdit === 'wallColor' ? 'Ścian' : activeColorEdit === 'roofColor' ? 'Dachu' : activeColorEdit === 'gateColor' ? 'Bramy' : activeColorEdit === 'gutterColor' ? 'Rynien' : 'Obróbek'}</span>
+        </h4>
+        <button onClick={() => setActiveColorEdit(null)} className="text-zinc-400 hover:text-red-500 font-bold flex items-center gap-1 text-sm bg-white px-2 py-1 rounded border shadow-sm transition-colors hover:bg-zinc-100">✕ Zamknij</button>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <h5 className="font-bold text-sm mb-3">Matowe:</h5>
-          <div className="space-y-2">
-            {matColors.map((c: any) => (
-              <button key={c.id} onClick={() => handleColorSelect(c.id)} className="w-full flex items-center gap-3 p-1.5 hover:bg-zinc-100 rounded-lg transition-colors">
-                <div className="w-8 h-8 rounded border shadow-sm" style={{backgroundColor: c.hex}}></div>
-                <span className="text-xs font-medium text-left">{c.label} {safeNum(c.price) > 0 ? `(+${c.price}zł)` : ''}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <h5 className="font-bold text-sm mb-3">Gładkie:</h5>
-          <div className="space-y-2">
-            {gladkieColors.map((c: any) => (
-              <button key={c.id} onClick={() => handleColorSelect(c.id)} className="w-full flex items-center gap-3 p-1.5 hover:bg-zinc-100 rounded-lg transition-colors">
-                <div className="w-8 h-8 rounded border shadow-sm" style={{backgroundColor: c.hex}}></div>
-                <span className="text-xs font-medium text-left">{c.label} {safeNum(c.price) > 0 ? `(+${c.price}zł)` : ''}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="space-y-6">
+        {groupedColors.length === 0 ? (
+          <p className="text-sm text-zinc-500 italic text-center py-4">Brak dodanych kolorów w bazie.</p>
+        ) : (
+          groupedColors.map((group) => (
+            <div key={group.label}>
+              <h5 className="font-bold text-xs mb-3 uppercase tracking-wider text-zinc-500 border-l-2 border-[var(--theme)] pl-2">{group.label}</h5>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {group.colors.map((c: any) => {
+                  const isWood = String(c.type).toLowerCase().includes('drewno') || !!c.texture;
+                  return (
+                    <button key={c.id} onClick={() => handleColorSelect(c.id)} className="flex items-center gap-3 p-2 bg-white hover:bg-zinc-100 rounded-lg transition-colors border border-zinc-200 hover:border-[var(--theme)] shadow-sm text-left">
+                      {isWood && c.texture ? (
+                        <div className="w-8 h-8 rounded border border-zinc-300 shadow-sm bg-cover bg-center shrink-0" style={{backgroundImage: `url(${c.texture})`}}></div>
+                      ) : (
+                        <div className="w-8 h-8 rounded border border-zinc-300 shadow-sm shrink-0" style={{backgroundColor: c.hex}}></div>
+                      )}
+                      <span className="text-xs font-medium text-zinc-700 leading-tight">
+                        {c.label} {safeNum(c.price) > 0 ? <span className="block text-[10px] font-bold text-[var(--theme)]">+{c.price} zł</span> : ''}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))
+        )}
       </div>
-
-      {drewnoColors.length > 0 && (
-        <div className="mt-6 border-t pt-4">
-          <h5 className="font-bold text-sm mb-3">Drewnopodobne:</h5>
-          <div className="grid grid-cols-2 gap-2">
-            {drewnoColors.map((c: any) => (
-              <button key={c.id} onClick={() => handleColorSelect(c.id)} className="flex items-center gap-3 p-1.5 hover:bg-zinc-100 rounded-lg transition-colors">
-                {c.texture ? (
-                  <div className="w-8 h-8 rounded border shadow-sm bg-cover bg-center" style={{backgroundImage: `url(${c.texture})`}}></div>
-                ) : (
-                  <div className="w-8 h-8 rounded border shadow-sm" style={{backgroundColor: c.hex}}></div>
-                )}
-                <span className="text-xs font-medium text-left">{c.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 
@@ -448,7 +460,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           </div>
         </div>
 
-        <div className="bg-zinc-900 text-white rounded-xl overflow-hidden shadow-lg">
+        <div className="bg-zinc-900 text-white rounded-xl overflow-hidden shadow-lg transition-all">
           <div className="p-4 flex items-center justify-between border-b border-zinc-800">
             <h3 className="font-bold tracking-widest flex items-center gap-2"><PaintBucket size={16}/> KOLORY GARAŻU</h3>
           </div>
@@ -472,7 +484,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                       ) : (
                         <div className="w-8 h-8 rounded border border-zinc-600 shadow-md" style={{backgroundColor: colorData.hex}}></div>
                       )}
-                      <span className="text-xs font-bold w-24 leading-tight">{colorData.label}</span>
+                      <span className="text-xs font-bold w-24 leading-tight truncate">{colorData.label}</span>
                     </div>
                     <button 
                       onClick={() => setActiveColorEdit(activeColorEdit === item.key ? null : item.key)}
@@ -502,7 +514,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           </div>
         </div>
 
-        {activeColorEdit && <ColorSelectionModal />}
+        {/* WYSWIETLANIE MENU KOLORÓW */}
+        {activeColorEdit && <InlineColorSelector />}
       </Section>
       
       <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
@@ -518,13 +531,13 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <span className="text-3xl font-extrabold text-[var(--theme)]">{calculatedPrice} zł</span>
         </div>
         
-        {/* WYzwalacz Modelu AR */}
+        {/* WYZWALACZ MODELU AR */}
         <button 
           onClick={() => setIsGeneratingAR && setIsGeneratingAR(true)} 
           disabled={isGeneratingAR}
           className="w-full flex items-center justify-center gap-2 font-bold py-3 px-6 rounded-xl text-zinc-900 bg-zinc-100 hover:bg-zinc-200 transition-all shadow-sm mb-3 disabled:opacity-50"
         >
-          <Smartphone size={18} /> {isGeneratingAR ? 'Generowanie pakietu...' : 'Zobacz Garaż w AR (Na żywo)'}
+          <Smartphone size={18} /> {isGeneratingAR ? 'Generowanie pakietu...' : 'Zobacz w AR (Na żywo)'}
         </button>
 
         <button className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer">
