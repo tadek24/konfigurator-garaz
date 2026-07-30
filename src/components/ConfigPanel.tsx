@@ -249,40 +249,60 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     </div>
   );
 
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
     if (!region) {
       alert('Proszę wybrać województwo przed przejściem do płatności.');
       return;
     }
 
     setIsProcessing(true);
+
+    // Budujemy pełną paczkę zamówienia (teraz zawiera też konfigurację wiaty)
+    const orderData = {
+      action: 'konfigurator_checkout', // Standardowy klucz dla wtyczek odbierających message
+      config: config,
+      price: calculatedPrice,
+      region: region,
+      productId: appData.wooProductId || 19
+    };
+
     try {
-      const apiUrl = appData.apiUrl || 'https://konfigurator.skillup-szkolenia.pl/wp-json/twoj-plugin/v1/order'; 
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          config: config,            
-          price: calculatedPrice,    
-          region: region,            
-          productId: appData.wooProductId || 19 
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.redirectUrl || data.checkout_url) {
-        window.location.href = data.redirectUrl || data.checkout_url; 
+      // Vercel działa wewnątrz iFrame (okna) na stronie WordPress.
+      // Używamy postMessage, aby bezpiecznie wypchnąć zamówienie do wtyczki na WP.
+      if (window.parent !== window) {
+        window.parent.postMessage(orderData, '*');
+        
+        // WordPress po przechwyceniu wiadomości powinien wykonać redirect.
+        // Zwalniamy przycisk po kilku sekundach na wypadek, gdyby przeładowanie strony trwało dłużej.
+        setTimeout(() => setIsProcessing(false), 3000);
+      } 
+      // Zapasowy wariant z Fetch, gdyby wtyczka miała jednak odblokowane REST API
+      else if (appData.apiUrl) {
+        fetch(appData.apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(orderData),
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.redirectUrl || data.checkout_url) {
+            window.location.href = data.redirectUrl || data.checkout_url;
+          } else {
+             throw new Error('Brak adresu przekierowania z serwera');
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          alert('Serwer nie odpowiedział poprawnie. Sprawdź logi w WordPress.');
+          setIsProcessing(false);
+        });
       } else {
-        alert('Wystąpił błąd serwera. Brak linku do płatności.');
+        alert('Ta aplikacja musi być uruchomiona z poziomu strony głównej sklepu.');
+        setIsProcessing(false);
       }
     } catch (error) {
-      console.error('Błąd checkoutu:', error);
-      alert('Problem z połączeniem. Spróbuj ponownie.');
-    } finally {
+      console.error('Błąd transmisji danych:', error);
+      alert('Wystąpił nieoczekiwany problem z przeglądarką. Odśwież stronę i spróbuj ponownie.');
       setIsProcessing(false);
     }
   };
