@@ -45,6 +45,8 @@ const RoofIcon = ({ type }: { type: RoofType }) => {
 
 export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData, isGeneratingAR, setIsGeneratingAR }: ConfigPanelProps) {
   const [activeColorEdit, setActiveColorEdit] = useState<string | null>(null);
+  const [region, setRegion] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const pricing = appData.pricing || {};
   const customAddons = appData.addons || [];
@@ -166,7 +168,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
     const wallWidth = wall === 'front' || wall === 'back' ? config.width : config.length;
     
-    // Sprytny myk: jeśli to przednia ściana, unikamy "środka" by nie wpaść na bramę i nie zostać zrzuconym na dół
     let startX = 0;
     if (wall === 'front' && type !== 'gate') {
       const hasGates = config.elements.some(e => e.wall === 'front' && e.type === 'gate');
@@ -247,6 +248,44 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       </div>
     </div>
   );
+
+  const handleCheckout = async () => {
+    if (!region) {
+      alert('Proszę wybrać województwo przed przejściem do płatności.');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const apiUrl = appData.apiUrl || 'https://konfigurator.skillup-szkolenia.pl/wp-json/twoj-plugin/v1/order'; 
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          config: config,            
+          price: calculatedPrice,    
+          region: region,            
+          productId: appData.wooProductId || 19 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.redirectUrl || data.checkout_url) {
+        window.location.href = data.redirectUrl || data.checkout_url; 
+      } else {
+        alert('Wystąpił błąd serwera. Brak linku do płatności.');
+      }
+    } catch (error) {
+      console.error('Błąd checkoutu:', error);
+      alert('Problem z połączeniem. Spróbuj ponownie.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="pb-12">
@@ -615,8 +654,14 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-white">
         <div className="flex flex-col gap-2 mb-4">
           <label className="text-sm font-semibold text-zinc-300">Województwo <span className="text-red-500">*</span></label>
-          <select className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2" style={{accentColor: 'var(--theme)'}} required >
-            <option value="" disabled selected>Wybierz z listy...</option>
+          <select 
+            value={region} 
+            onChange={(e) => setRegion(e.target.value)} 
+            className="p-3 rounded-lg text-zinc-900 bg-white border-none outline-none font-medium focus:ring-2" 
+            style={{accentColor: 'var(--theme)'}} 
+            required 
+          >
+            <option value="" disabled>Wybierz z listy...</option>
             {WOJEWODZTWA.map(w => <option key={w} value={w}>{w}</option>)}
           </select>
         </div>
@@ -633,8 +678,12 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <Smartphone size={18} /> {isGeneratingAR ? 'Generowanie pakietu...' : 'Zobacz Garaż w AR (Na żywo)'}
         </button>
 
-        <button className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer">
-          Kupuję i płacę
+        <button 
+          onClick={handleCheckout} 
+          disabled={isProcessing}
+          className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer disabled:opacity-50 flex justify-center items-center gap-2"
+        >
+          {isProcessing ? 'Przetwarzanie...' : 'Kupuję i płacę'}
         </button>
       </div>
     </div>
