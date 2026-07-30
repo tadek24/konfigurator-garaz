@@ -12,14 +12,20 @@ interface GarageModelProps {
   colors?: any[];
 }
 
+// ZMIANA: Zoptymalizowana i odporna na błędy funkcja resolveColor
 function resolveColor(colorId: string | undefined, colors: any[] = []): { hex: string; isWood: boolean; textureUrl: string } {
   if (!colorId) return { hex: '#d4d4d4', isWood: false, textureUrl: '' };
   if (colorId.startsWith('#')) return { hex: colorId, isWood: false, textureUrl: '' };
   const found = (colors || []).find((c: any) => c.id === colorId);
   if (!found) return { hex: '#d4d4d4', isWood: false, textureUrl: '' };
+
+  // Automatyczne wykrywanie tekstury po obecności linku lub fragmentu nazwy grupy
+  const hasTexture = Boolean(found.texture && found.texture.trim() !== '');
+  const isWoodType = found.type ? found.type.toLowerCase().includes('drewn') : false;
+
   return {
     hex: found.hex || '#d4d4d4',
-    isWood: found.type === 'drewno',
+    isWood: hasTexture || isWoodType,
     textureUrl: found.texture || '',
   };
 }
@@ -191,6 +197,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
           const horizTex = tex.clone();
           horizTex.rotation = Math.PI / 2;
           horizTex.center.set(0.5, 0.5);
+          horizTex.wrapS = horizTex.wrapT = THREE.RepeatWrapping;
           horizTex.needsUpdate = true;
 
           setLoadedTextures(prev => ({ ...prev, [url]: tex, [`${url}_horiz`]: horizTex }));
@@ -206,7 +213,6 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const showCornerFlashings = (config.extraOptions || []).includes('cornerFlashings');
   const showRoofFlashings = (config.extraOptions || []).includes('roofFlashings');
 
-  // W tej sekcji generujemy poprawne tekstury poziome i normal-mapy
   const { trapezTexHoriz, woodNormalHoriz } = useMemo(() => {
     trapezTex.wrapS = trapezTex.wrapT = THREE.RepeatWrapping;
     const profileRepeat = config.wallProfile?.includes('t7') ? 6 : config.wallProfile?.includes('t17') ? 2 : 4; 
@@ -222,7 +228,6 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
       return clone;
     };
 
-    // woodColorHoriz usunięte - fallbackujemy bezpośrednio do trapezTexHoriz poniżej
     return { 
       trapezTexHoriz: rotateTexture(trapezTex), 
       woodNormalHoriz: rotateTexture(woodNormal) 
@@ -313,13 +318,11 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
               </group>
             );
           } else if (el.type === 'gate') {
-            // TUTAJ POPRAWIONO - Podajemy domyślnie trapezTex/trapezTexHoriz zamiast niezdefiniowanych zmiennych woodColor/woodColorHoriz
             return <AnimatedGate key={el.id} el={{ ...el, x: xPos * 100 }} woodColor={trapezTex} woodNormal={woodNormal} trapezTex={trapezTex} trapezTexHoriz={trapezTexHoriz} woodColorHoriz={trapezTexHoriz} woodNormalHoriz={woodNormalHoriz} config={config} colors={colors} loadedTextures={loadedTextures} />;
           } else {
             const { hex: doorHex, isWood: isDoorWood, textureUrl: doorTexUrl } = resolveColor(config.doorColor, colors);
             const isHorizontal = config.doorProfile?.startsWith('poziome');
             
-            // TUTAJ POPRAWIONO - Fallback do bezpiecznych tekstur wygenerowanych przez useTexture / useMemo
             const baseDoorWood = doorTexUrl && loadedTextures[doorTexUrl] ? loadedTextures[doorTexUrl] : trapezTex;
             const baseDoorWoodHoriz = doorTexUrl && loadedTextures[`${doorTexUrl}_horiz`] ? loadedTextures[`${doorTexUrl}_horiz`] : trapezTexHoriz;
 
