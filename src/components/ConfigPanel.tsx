@@ -289,6 +289,47 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         </div>
       </Section>
 
+      <Section title="Zintegrowana Wiata" icon={<Home size={20} />}>
+        <div className="space-y-4">
+          <label className="flex items-center justify-between cursor-pointer p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm">
+            <span className="text-sm font-semibold text-zinc-700">Dodaj wiatę do garażu</span>
+            <input type="checkbox" checked={config.hasCarport || false} onChange={(e) => updateConfig('hasCarport', e.target.checked)} className="w-5 h-5 rounded text-[var(--theme)] focus:ring-[var(--theme)]" />
+          </label>
+
+          {config.hasCarport && (
+            <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-1"><label className="text-xs font-bold uppercase text-zinc-500">Szerokość wiaty (cm)</label><span className="font-bold text-[var(--theme)]">{config.carportWidth || 300}</span></div>
+                <input type="range" min={100} max={500} step={10} value={config.carportWidth || 300} onChange={(e) => updateConfig('carportWidth', Number(e.target.value))} className="w-full" style={{accentColor: 'var(--theme)'}} />
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold uppercase text-zinc-500 block mb-2">Strona wiaty</label>
+                <div className="flex gap-2">
+                  <button onClick={() => updateConfig('carportSide', 'left')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${config.carportSide === 'left' ? 'bg-zinc-800 text-white' : 'bg-white border border-zinc-300'}`}>Lewa</button>
+                  <button onClick={() => updateConfig('carportSide', 'right')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${config.carportSide !== 'left' ? 'bg-zinc-800 text-white' : 'bg-white border border-zinc-300'}`}>Prawa</button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase text-zinc-500 block mb-2">Zabudowa ścian (Lamele)</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['front', 'side', 'back'].map((wFace) => {
+                    const isChecked = config.carportWalls?.[wFace as keyof typeof config.carportWalls] ?? true;
+                    return (
+                      <label key={wFace} className={`flex justify-center items-center py-2 border rounded-lg cursor-pointer text-xs font-bold transition-all ${isChecked ? 'border-[var(--theme)] bg-zinc-100 text-[var(--theme)]' : 'border-zinc-300 bg-white text-zinc-400'}`}>
+                        <input type="checkbox" className="hidden" checked={isChecked} onChange={(e) => updateConfig('carportWalls' as any, { ...(config.carportWalls || {front: true, side: true, back: true}), [wFace]: e.target.checked })} />
+                        {wFace === 'front' ? 'Przód' : wFace === 'back' ? 'Tył' : 'Bok'}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Section>
+
       <Section title="Parametry Bram" icon={<BoxSelect size={20} />}>
         <div className="mb-4">
           <div className="flex justify-between items-center mb-3">
