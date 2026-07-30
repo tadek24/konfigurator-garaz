@@ -413,19 +413,33 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     for (let i = 0; i < numSlats; i++) {
       const y = i * step + slatH/2 + 0.05;
       const isInsert = (i === Math.floor(numSlats/2) || i === Math.floor(numSlats/2) - 1);
-      const mat = isInsert ? insertMat : baseMat;
 
       if (config.carportWalls?.side) {
         const x = cSide === 'right' ? maxX - pSize/2 : minX + pSize/2;
-        slats.push(<mesh key={`side-${i}`} position={[x, y, 0]} material={mat} castShadow><boxGeometry args={[0.02, slatH, l - pSize*2]} /></mesh>);
+        slats.push(
+          <mesh key={`side-${i}`} position={[x, y, 0]} castShadow>
+            <boxGeometry args={[0.02, slatH, l - pSize*2]} />
+            {isInsert ? <primitive object={insertMat} attach="material" /> : wallMaterialComponent}
+          </mesh>
+        );
       }
       if (config.carportWalls?.front) {
         const x = cSide === 'right' ? w/2 + cw/2 : -w/2 - cw/2;
-        slats.push(<mesh key={`front-${i}`} position={[x, y, l/2 - pSize/2]} material={mat} castShadow><boxGeometry args={[cw - pSize*2, slatH, 0.02]} /></mesh>);
+        slats.push(
+          <mesh key={`front-${i}`} position={[x, y, l/2 - pSize/2]} castShadow>
+            <boxGeometry args={[cw - pSize*2, slatH, 0.02]} />
+            {isInsert ? <primitive object={insertMat} attach="material" /> : wallMaterialComponent}
+          </mesh>
+        );
       }
       if (config.carportWalls?.back) {
         const x = cSide === 'right' ? w/2 + cw/2 : -w/2 - cw/2;
-        slats.push(<mesh key={`back-${i}`} position={[x, y, -l/2 + pSize/2]} material={mat} castShadow><boxGeometry args={[cw - pSize*2, slatH, 0.02]} /></mesh>);
+        slats.push(
+          <mesh key={`back-${i}`} position={[x, y, -l/2 + pSize/2]} castShadow>
+            <boxGeometry args={[cw - pSize*2, slatH, 0.02]} />
+            {isInsert ? <primitive object={insertMat} attach="material" /> : wallMaterialComponent}
+          </mesh>
+        );
       }
     }
 
