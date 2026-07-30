@@ -49,4 +49,18 @@ export interface GarageConfig {
   gutterColor: string; // NOWE: Kolor rynien
   
   windowColor: string;
+
+  // Dopisz to wewnątrz interfejsu GarageConfig w pliku types.ts:
+  
+  // NOWE: Zintegrowana Wiata (Carport)
+  hasCarport?: boolean;
+  carportWidth?: number; // np. od 100 do 400 cm
+  carportSide?: 'left' | 'right';
+  carportWalls?: {
+    front: boolean;
+    back: boolean;
+    side: boolean;
+  };
+  carportBaseColor?: string;
+  carportInsertColor?: string;
 }

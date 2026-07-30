@@ -12,60 +12,41 @@ interface GarageModelProps {
   colors?: any[];
 }
 
-// ZMIANA: Zoptymalizowana i odporna na błędy funkcja resolveColor
 function resolveColor(colorId: string | undefined, colors: any[] = []): { hex: string; isWood: boolean; textureUrl: string } {
   if (!colorId) return { hex: '#d4d4d4', isWood: false, textureUrl: '' };
   if (colorId.startsWith('#')) return { hex: colorId, isWood: false, textureUrl: '' };
   const found = (colors || []).find((c: any) => c.id === colorId);
   if (!found) return { hex: '#d4d4d4', isWood: false, textureUrl: '' };
 
-  // Automatyczne wykrywanie tekstury po obecności linku lub fragmentu nazwy grupy
   const hasTexture = Boolean(found.texture && found.texture.trim() !== '');
   const isWoodType = found.type ? found.type.toLowerCase().includes('drewn') : false;
 
-  return {
-    hex: found.hex || '#d4d4d4',
-    isWood: hasTexture || isWoodType,
-    textureUrl: found.texture || '',
-  };
+  return { hex: found.hex || '#d4d4d4', isWood: hasTexture || isWoodType, textureUrl: found.texture || '' };
 }
 
 const PANEL_COUNT = 5;
 
 function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, woodColorHoriz, woodNormalHoriz, config, colors, loadedTextures }: any) {
+  // ... (kod bramy segmentowej pozostaje bez zmian)
   const groupRef = useRef<THREE.Group>(null);
   const progress = useRef(el.isOpen ? 1 : 0);
-
-  const elW = (el.width || 0) * 0.01;
-  const elH = (el.height || 0) * 0.01;
-  const thick = 0.05;
-  const panelH = elH / PANEL_COUNT;
+  const elW = (el.width || 0) * 0.01; const elH = (el.height || 0) * 0.01; const thick = 0.05; const panelH = elH / PANEL_COUNT;
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
     const target = el.isOpen ? 1 : 0;
     progress.current += (target - progress.current) * Math.min(1, delta * 3.0);
     const p = progress.current;
-
     const panels = groupRef.current.children;
     for (let i = 0; i < PANEL_COUNT; i++) {
       const panel = panels[i] as THREE.Group;
       if (!panel) continue;
-
       const startY = i * panelH + panelH / 2;
       const totalTravel = elH + 0.1; 
       const currentS = startY + p * totalTravel;
       const maxY = elH - panelH / 2;
-
-      if (currentS <= maxY + 0.005) {
-        panel.position.set(0, currentS, 0);
-        panel.rotation.x = 0;
-      } else {
-        const overflow = currentS - maxY;
-        panel.position.set(0, maxY, -overflow);
-        panel.rotation.x = -Math.PI / 2;
-        panel.position.y = elH - thick / 2;
-      }
+      if (currentS <= maxY + 0.005) { panel.position.set(0, currentS, 0); panel.rotation.x = 0; } 
+      else { const overflow = currentS - maxY; panel.position.set(0, maxY, -overflow); panel.rotation.x = -Math.PI / 2; panel.position.y = elH - thick / 2; }
     }
   });
 
@@ -73,7 +54,6 @@ function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, w
   const isHorizontal = config?.gateProfile?.startsWith('poziome') || el.gateType === 'sectional';
   const baseWoodColor = textureUrl && loadedTextures[textureUrl] ? loadedTextures[textureUrl] : woodColor;
   const baseWoodColorHoriz = textureUrl && loadedTextures[`${textureUrl}_horiz`] ? loadedTextures[`${textureUrl}_horiz`] : woodColorHoriz;
-
   const activeColorMap = isWood ? (isHorizontal ? baseWoodColorHoriz : baseWoodColor) : (isHorizontal ? trapezTexHoriz : trapezTex);
   const activeNormalMap = isWood ? (isHorizontal ? woodNormalHoriz : woodNormal) : undefined;
 
@@ -92,10 +72,9 @@ function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, w
 }
 
 function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, woodColorHoriz, woodNormalHoriz, config, colors, loadedTextures }: any) {
+   // ... (kod animowanej bramy pozostaje bez zmian)
   const ref = useRef<THREE.Group>(null);
-  const elW = (el.width || 0) * 0.01;
-  const elH = (el.height || 0) * 0.01;
-  const thick = 0.05;
+  const elW = (el.width || 0) * 0.01; const elH = (el.height || 0) * 0.01; const thick = 0.05;
   const animState = useRef({ progress: el.isOpen ? 1 : 0 });
 
   useFrame((_, delta) => {
@@ -103,58 +82,34 @@ function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, wo
     const target = el.isOpen ? 1 : 0;
     animState.current.progress += (target - animState.current.progress) * Math.min(1, delta * 2.5);
     const phase = animState.current.progress;
-
-    if (el.gateType === 'up-and-over') {
-      const pivot = ref.current.children[0];
-      if (pivot) pivot.rotation.x = -phase * (Math.PI / 2); 
-    } else if (el.gateType === 'swing') {
-      const leftDoor  = ref.current.children[0];
-      const rightDoor = ref.current.children[1];
-      if (leftDoor)  leftDoor.rotation.y  = -phase * (Math.PI / 2);
-      if (rightDoor) rightDoor.rotation.y =  phase * (Math.PI / 2);
-    }
+    if (el.gateType === 'up-and-over') { const pivot = ref.current.children[0]; if (pivot) pivot.rotation.x = -phase * (Math.PI / 2); } 
+    else if (el.gateType === 'swing') { const leftDoor  = ref.current.children[0]; const rightDoor = ref.current.children[1]; if (leftDoor) leftDoor.rotation.y = -phase * (Math.PI / 2); if (rightDoor) rightDoor.rotation.y = phase * (Math.PI / 2); }
   });
 
-  if (el.gateType === 'sectional') {
-    return <SectionalGate el={el} woodColor={woodColor} woodNormal={woodNormal} trapezTex={trapezTex} trapezTexHoriz={trapezTexHoriz} woodColorHoriz={woodColorHoriz} woodNormalHoriz={woodNormalHoriz} config={config} colors={colors} loadedTextures={loadedTextures} />;
-  }
+  if (el.gateType === 'sectional') return <SectionalGate el={el} woodColor={woodColor} woodNormal={woodNormal} trapezTex={trapezTex} trapezTexHoriz={trapezTexHoriz} woodColorHoriz={woodColorHoriz} woodNormalHoriz={woodNormalHoriz} config={config} colors={colors} loadedTextures={loadedTextures} />;
 
   const { hex: gateHex, isWood, textureUrl } = resolveColor(config?.gateColor, colors);
   const isHorizontal = config?.gateProfile?.startsWith('poziome');
   const baseWoodColor = textureUrl && loadedTextures[textureUrl] ? loadedTextures[textureUrl] : woodColor;
   const baseWoodColorHoriz = textureUrl && loadedTextures[`${textureUrl}_horiz`] ? loadedTextures[`${textureUrl}_horiz`] : woodColorHoriz;
-
   const activeColorMap = isWood ? (isHorizontal ? baseWoodColorHoriz : baseWoodColor) : (isHorizontal ? trapezTexHoriz : trapezTex);
   const activeNormalMap = isWood ? (isHorizontal ? woodNormalHoriz : woodNormal) : undefined;
 
-  const gateMatComponent = (
-    <meshStandardMaterial map={activeColorMap} normalMap={activeNormalMap} normalScale={isWood ? new THREE.Vector2(1.5, 1.5) : undefined} color={isWood ? '#ffffff' : gateHex} roughness={isWood ? 0.7 : 0.4} metalness={isWood ? 0.0 : 0.6} envMapIntensity={1.5} />
-  );
-
+  const gateMatComponent = <meshStandardMaterial map={activeColorMap} normalMap={activeNormalMap} normalScale={isWood ? new THREE.Vector2(1.5, 1.5) : undefined} color={isWood ? '#ffffff' : gateHex} roughness={isWood ? 0.7 : 0.4} metalness={isWood ? 0.0 : 0.6} envMapIntensity={1.5} />;
   const isLeftHinged = el.hingeSide === 'left';
   const handleXOffset = isLeftHinged ? (elW / 2 - 0.1) : -(elW / 2 - 0.1);
 
   if (el.gateType === 'swing') {
     return (
       <group ref={ref} position={[(el.x || 0) * 0.01, (el.y || 0) * 0.01, 0]}>
-        <group position={[-elW / 2, 0, 0]}>
-          <mesh position={[elW / 4, elH / 2, 0]} castShadow receiveShadow><boxGeometry args={[elW / 2 - 0.01, elH - 0.02, thick]} />{gateMatComponent}</mesh>
-          <group position={[elW / 2 - 0.1, elH / 2, thick / 2 + 0.025]}><mesh><sphereGeometry args={[0.028, 16, 16]} /><meshStandardMaterial color="#333" roughness={0.5} metalness={0.8} /></mesh><mesh position={[0, -0.05, 0]}><cylinderGeometry args={[0.012, 0.012, 0.1, 8]} /><meshStandardMaterial color="#333" roughness={0.5} /></mesh></group>
-        </group>
-        <group position={[elW / 2, 0, 0]}>
-          <mesh position={[-elW / 4, elH / 2, 0]} castShadow receiveShadow><boxGeometry args={[elW / 2 - 0.01, elH - 0.02, thick]} />{gateMatComponent}</mesh>
-          <group position={[-elW / 2 + 0.1, elH / 2, thick / 2 + 0.025]}><mesh><sphereGeometry args={[0.028, 16, 16]} /><meshStandardMaterial color="#333" roughness={0.5} metalness={0.8} /></mesh><mesh position={[0, -0.05, 0]}><cylinderGeometry args={[0.012, 0.012, 0.1, 8]} /><meshStandardMaterial color="#333" roughness={0.5} /></mesh></group>
-        </group>
+        <group position={[-elW / 2, 0, 0]}><mesh position={[elW / 4, elH / 2, 0]} castShadow receiveShadow><boxGeometry args={[elW / 2 - 0.01, elH - 0.02, thick]} />{gateMatComponent}</mesh><group position={[elW / 2 - 0.1, elH / 2, thick / 2 + 0.025]}><mesh><sphereGeometry args={[0.028, 16, 16]} /><meshStandardMaterial color="#333" roughness={0.5} metalness={0.8} /></mesh><mesh position={[0, -0.05, 0]}><cylinderGeometry args={[0.012, 0.012, 0.1, 8]} /><meshStandardMaterial color="#333" roughness={0.5} /></mesh></group></group>
+        <group position={[elW / 2, 0, 0]}><mesh position={[-elW / 4, elH / 2, 0]} castShadow receiveShadow><boxGeometry args={[elW / 2 - 0.01, elH - 0.02, thick]} />{gateMatComponent}</mesh><group position={[-elW / 2 + 0.1, elH / 2, thick / 2 + 0.025]}><mesh><sphereGeometry args={[0.028, 16, 16]} /><meshStandardMaterial color="#333" roughness={0.5} metalness={0.8} /></mesh><mesh position={[0, -0.05, 0]}><cylinderGeometry args={[0.012, 0.012, 0.1, 8]} /><meshStandardMaterial color="#333" roughness={0.5} /></mesh></group></group>
       </group>
     );
   }
-
   return (
     <group ref={ref} position={[(el.x || 0) * 0.01, (el.y || 0) * 0.01, 0]}>
-      <group position={[0, elH, 0]}>
-        <mesh position={[0, -elH / 2, 0]} castShadow receiveShadow><boxGeometry args={[elW - 0.02, elH - 0.02, thick]} />{gateMatComponent}</mesh>
-        <group position={[handleXOffset, -elH + 0.25, thick / 2 + 0.025]}><mesh><sphereGeometry args={[0.028, 16, 16]} /><meshStandardMaterial color="#333" roughness={0.5} metalness={0.8} /></mesh><mesh position={[0, -0.05, 0]}><cylinderGeometry args={[0.012, 0.012, 0.1, 8]} /><meshStandardMaterial color="#333" roughness={0.5} /></mesh></group>
-      </group>
+      <group position={[0, elH, 0]}><mesh position={[0, -elH / 2, 0]} castShadow receiveShadow><boxGeometry args={[elW - 0.02, elH - 0.02, thick]} />{gateMatComponent}</mesh><group position={[handleXOffset, -elH + 0.25, thick / 2 + 0.025]}><mesh><sphereGeometry args={[0.028, 16, 16]} /><meshStandardMaterial color="#333" roughness={0.5} metalness={0.8} /></mesh><mesh position={[0, -0.05, 0]}><cylinderGeometry args={[0.012, 0.012, 0.1, 8]} /><meshStandardMaterial color="#333" roughness={0.5} /></mesh></group></group>
     </group>
   );
 }
@@ -168,9 +123,18 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const t = 0.05;     
   const slopeH = 0.4; 
 
+  // GEOMETRIA WIATY
+  const hasCarport = config.hasCarport || false;
+  const cw = hasCarport ? (config.carportWidth || 300) * 0.01 : 0;
+  const cSide = config.carportSide || 'right';
+  
+  const minX = cSide === 'left' ? -w/2 - cw : -w/2;
+  const maxX = cSide === 'right' ? w/2 + cw : w/2;
+  const totalW = maxX - minX;
+  const centerX = (minX + maxX) / 2; // Służy do wyśrodkowania dachu
+
   const [trapezTex] = useTexture(['/textures/trapez.jpg']);
   const [woodNormal] = useTexture(['/textures/drewno-normal.jpg']);
-
   const [loadedTextures, setLoadedTextures] = useState<Record<string, THREE.Texture>>({});
 
   useEffect(() => {
@@ -182,6 +146,8 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
       resolveColor(config.cornerFlashingColor, colors).textureUrl,
       resolveColor(config.roofFlashingColor, colors).textureUrl,
       resolveColor(config.gutterColor, colors).textureUrl,
+      resolveColor(config.carportBaseColor || '#333333', colors).textureUrl,
+      resolveColor(config.carportInsertColor || config.gateColor, colors).textureUrl,
     ].filter(url => url !== '')));
 
     const loader = new THREE.TextureLoader();
@@ -199,17 +165,13 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
           horizTex.center.set(0.5, 0.5);
           horizTex.wrapS = horizTex.wrapT = THREE.RepeatWrapping;
           horizTex.needsUpdate = true;
-
           setLoadedTextures(prev => ({ ...prev, [url]: tex, [`${url}_horiz`]: horizTex }));
-        }, undefined, () => {
-          console.warn("Blokada CORS na serwerze WordPress. Obrazek:", url);
         });
       }
     });
-  }, [config.wallColor, config.roofColor, config.gateColor, config.doorColor, config.cornerFlashingColor, config.roofFlashingColor, config.gutterColor, colors, loadedTextures]);
+  }, [config, colors, loadedTextures]);
 
-  const customGutters = (config.extraOptions || []).some(id => id.toLowerCase().includes('rynn'));
-  const showGutters = config.gutters || customGutters; 
+  const showGutters = config.gutters || (config.extraOptions || []).some(id => id.toLowerCase().includes('rynn'));
   const showCornerFlashings = (config.extraOptions || []).includes('cornerFlashings');
   const showRoofFlashings = (config.extraOptions || []).includes('roofFlashings');
 
@@ -219,84 +181,69 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     trapezTex.repeat.set(profileRepeat, profileRepeat);
     woodNormal.wrapS = woodNormal.wrapT = THREE.RepeatWrapping;
     woodNormal.repeat.set(1, 1);
-
-    const rotateTexture = (tex: THREE.Texture) => {
-      const clone = tex.clone();
-      clone.rotation = Math.PI / 2;
-      clone.center.set(0.5, 0.5);
-      clone.needsUpdate = true;
-      return clone;
-    };
-
-    return { 
-      trapezTexHoriz: rotateTexture(trapezTex), 
-      woodNormalHoriz: rotateTexture(woodNormal) 
-    };
+    const rotateTexture = (tex: THREE.Texture) => { const clone = tex.clone(); clone.rotation = Math.PI / 2; clone.center.set(0.5, 0.5); clone.needsUpdate = true; return clone; };
+    return { trapezTexHoriz: rotateTexture(trapezTex), woodNormalHoriz: rotateTexture(woodNormal) };
   }, [trapezTex, woodNormal, config.wallProfile]);
 
-  let hFL = h, hFR = h, hBL = h, hBR = h;
   const rt = String(config.roofType || '').toLowerCase();
-  
   const isDual = rt.includes('dual') || rt.includes('dwuspad');
   const isFront = rt.includes('front') || rt.includes('przód');
   const isBack = rt.includes('back') || rt.includes('tył');
   const isLeft = rt.includes('left') || rt.includes('lewo');
   const isRight = rt.includes('right') || rt.includes('prawo');
 
-  if (isDual) { hFL = h; hFR = h; hBL = h; hBR = h; } 
-  else if (isFront) { hBL = h + slopeH; hBR = h + slopeH; } 
-  else if (isBack) { hFL = h + slopeH; hFR = h + slopeH; } 
-  else if (isLeft) { hFR = h + slopeH; hBR = h + slopeH; } 
-  else if (isRight) { hFL = h + slopeH; hBL = h + slopeH; }
-
-  const createFBShape = (leftH: number, rightH: number, isTri = false) => {
-    const shape = new THREE.Shape();
-    const halfW = w / 2; 
-    shape.moveTo(-halfW, 0); 
-    shape.lineTo( halfW, 0);
-    shape.lineTo( halfW, rightH);
-    if (isTri) shape.lineTo(0, rightH + slopeH);
-    shape.lineTo(-halfW, leftH);
-    shape.closePath();
-    return shape;
+  // Funkcja obliczająca wysokość dachu w dowolnym punkcie (X, Z) - Magia symetrii!
+  const getH = (x: number, z: number) => {
+    if (isDual) return h + slopeH * (1 - Math.abs(x - centerX) / (totalW / 2));
+    if (isFront) return h + slopeH * (0.5 - z/l);
+    if (isBack) return h + slopeH * (0.5 + z/l);
+    if (isLeft) return h + slopeH * ((x - minX) / totalW); // spada na lewo, prawa najwyżej
+    if (isRight) return h + slopeH * (1 - (x - minX) / totalW);
+    return h;
   };
 
-  const createSideShape = (frontH: number, rearH: number) => {
-    const shape = new THREE.Shape();
-    const sideL = l - 2 * t;
-    shape.moveTo(0, 0);
-    shape.lineTo(sideL, 0);
-    shape.lineTo(sideL, rearH);
-    shape.lineTo(0, frontH);
-    shape.closePath();
-    return shape;
+  const createGarageFrontShape = () => {
+    const s = new THREE.Shape();
+    s.moveTo(-w/2, 0); s.lineTo(w/2, 0); s.lineTo(w/2, getH(w/2, l/2));
+    if (isDual && centerX > -w/2 && centerX < w/2) s.lineTo(centerX, getH(centerX, l/2));
+    s.lineTo(-w/2, getH(-w/2, l/2));
+    s.closePath(); return s;
+  };
+
+  const createGarageBackShape = () => {
+    const s = new THREE.Shape();
+    s.moveTo(-w/2, 0); s.lineTo(w/2, 0); s.lineTo(w/2, getH(-w/2, -l/2)); 
+    if (isDual && centerX > -w/2 && centerX < w/2) s.lineTo(-centerX, getH(centerX, -l/2));
+    s.lineTo(-w/2, getH(w/2, -l/2)); 
+    s.closePath(); return s;
+  };
+
+  const createGarageSideShape = (isRightSide: boolean) => {
+    const s = new THREE.Shape();
+    const wallX = isRightSide ? w/2 : -w/2;
+    s.moveTo(0, 0); s.lineTo(l, 0);
+    s.lineTo(l, getH(wallX, -l/2));
+    s.lineTo(0, getH(wallX, l/2));
+    s.closePath(); return s;
   };
 
   const wallExtrude = { depth: t, bevelEnabled: false };
-  const frontShape = createFBShape(hFL, hFR, isDual);
-  const backShape = createFBShape(hBR, hBL, isDual);
-  const leftSideShape  = createSideShape(hFL, hBL);
-  const rightSideShape = createSideShape(hFR, hBR);
 
-  const getSubtractions = (wall: WallFace, isSide = false, isLeft = false) => {
+  const getSubtractions = (wall: WallFace, isSide = false, isLeftWall = false) => {
     return (config.elements || []).filter(e => e.wall === wall).map((el, i) => {
       let xShape = (el.x || 0) * 0.01;
-      if (isSide) xShape = isLeft ? ((l - 2*t) / 2 - (el.x || 0) * 0.01) : ((l - 2*t) / 2 + (el.x || 0) * 0.01);
-      return (
-        <Subtraction key={i} position={[xShape, (el.y || 0) * 0.01 + ((el.height || 0) * 0.01) / 2, t / 2]}>
-          <boxGeometry args={[(el.width || 0) * 0.01, (el.height || 0) * 0.01, t * 4]} />
-        </Subtraction>
-      );
+      if (isSide) xShape = isLeftWall ? ((l - 2*t) / 2 - (el.x || 0) * 0.01) : ((l - 2*t) / 2 + (el.x || 0) * 0.01);
+      return <Subtraction key={i} position={[xShape, (el.y || 0) * 0.01 + ((el.height || 0) * 0.01) / 2, t / 2]}><boxGeometry args={[(el.width || 0) * 0.01, (el.height || 0) * 0.01, t * 4]} /></Subtraction>;
     });
   };
 
-  const renderElements = (wall: WallFace, pos: [number, number, number], rotY: number, isSide = false, isLeft = false) => {
+  const renderElements = (wall: WallFace, pos: [number, number, number], rotY: number, isSide = false, isLeftWall = false) => {
     return (
       <group position={pos} rotation={[0, rotY, 0]}>
         {(config.elements || []).filter(e => e.wall === wall).map((el) => {
           const elW = (el.width || 0) * 0.01; const elH = (el.height || 0) * 0.01; const elY = (el.y || 0) * 0.01;
           let xPos = (el.x || 0) * 0.01;
-          if (isSide) xPos = isLeft ? ((l - 2*t) / 2 - (el.x || 0) * 0.01) : ((l - 2*t) / 2 + (el.x || 0) * 0.01);
+          if (isSide) xPos = isLeftWall ? ((l - 2*t) / 2 - (el.x || 0) * 0.01) : ((l - 2*t) / 2 + (el.x || 0) * 0.01);
 
           if (el.type === 'window' || el.type === 'pvc-window') {
             const { hex: windowHex } = resolveColor(config.windowColor, colors);
@@ -309,36 +256,23 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
               </group>
             );
           } else if (el.type === 'skylight') {
-            return (
-              <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
-                <mesh castShadow={false}>
-                  <boxGeometry args={[elW, elH, 0.01]} />
-                  <meshStandardMaterial color="#e0f7fa" opacity={0.4} transparent roughness={0.05} metalness={0.6} side={THREE.DoubleSide} />
-                </mesh>
-              </group>
-            );
+            return <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}><mesh castShadow={false}><boxGeometry args={[elW, elH, 0.01]} /><meshStandardMaterial color="#e0f7fa" opacity={0.4} transparent roughness={0.05} metalness={0.6} side={THREE.DoubleSide} /></mesh></group>;
           } else if (el.type === 'gate') {
             return <AnimatedGate key={el.id} el={{ ...el, x: xPos * 100 }} woodColor={trapezTex} woodNormal={woodNormal} trapezTex={trapezTex} trapezTexHoriz={trapezTexHoriz} woodColorHoriz={trapezTexHoriz} woodNormalHoriz={woodNormalHoriz} config={config} colors={colors} loadedTextures={loadedTextures} />;
           } else {
             const { hex: doorHex, isWood: isDoorWood, textureUrl: doorTexUrl } = resolveColor(config.doorColor, colors);
             const isHorizontal = config.doorProfile?.startsWith('poziome');
-            
             const baseDoorWood = doorTexUrl && loadedTextures[doorTexUrl] ? loadedTextures[doorTexUrl] : trapezTex;
             const baseDoorWoodHoriz = doorTexUrl && loadedTextures[`${doorTexUrl}_horiz`] ? loadedTextures[`${doorTexUrl}_horiz`] : trapezTexHoriz;
-
             const activeColorMap = isDoorWood ? (isHorizontal ? baseDoorWoodHoriz : baseDoorWood) : (isHorizontal ? trapezTexHoriz : trapezTex);
             const activeNormalMap = isDoorWood ? (isHorizontal ? woodNormalHoriz : woodNormal) : undefined;
-            
             const isLeftHinged = el.hingeSide === 'left';
             const handleXOffset = isLeftHinged ? (elW / 2 - 0.1) : -(elW / 2 - 0.1);
             const hingeXOffset = isLeftHinged ? -(elW / 2 - 0.02) : (elW / 2 - 0.02);
 
             return (
               <group key={el.id} position={[xPos, elY + elH / 2, t / 2]}>
-                <mesh castShadow receiveShadow>
-                  <boxGeometry args={[elW - 0.02, elH - 0.02, t + 0.01]} />
-                  <meshStandardMaterial map={activeColorMap} normalMap={activeNormalMap} normalScale={isDoorWood ? new THREE.Vector2(1.5, 1.5) : undefined} color={isDoorWood ? '#ffffff' : doorHex} roughness={isDoorWood ? 0.7 : 0.4} metalness={isDoorWood ? 0.0 : 0.6} envMapIntensity={1.5} />
-                </mesh>
+                <mesh castShadow receiveShadow><boxGeometry args={[elW - 0.02, elH - 0.02, t + 0.01]} /><meshStandardMaterial map={activeColorMap} normalMap={activeNormalMap} normalScale={isDoorWood ? new THREE.Vector2(1.5, 1.5) : undefined} color={isDoorWood ? '#ffffff' : doorHex} roughness={isDoorWood ? 0.7 : 0.4} metalness={isDoorWood ? 0.0 : 0.6} envMapIntensity={1.5} /></mesh>
                 <group position={[handleXOffset, 0, t / 2 + 0.025]}><mesh><sphereGeometry args={[0.028, 16, 16]} /><meshStandardMaterial color="#333" roughness={0.5} metalness={0.8} /></mesh><mesh position={[0, -0.05, 0]}><cylinderGeometry args={[0.012, 0.012, 0.1, 8]} /><meshStandardMaterial color="#333" roughness={0.5} /></mesh></group>
                 <mesh position={[hingeXOffset, elH / 3, t / 2 + 0.01]}><boxGeometry args={[0.02, 0.08, 0.02]} /><meshStandardMaterial color="#333" /></mesh>
                 <mesh position={[hingeXOffset, -elH / 3, t / 2 + 0.01]}><boxGeometry args={[0.02, 0.08, 0.02]} /><meshStandardMaterial color="#333" /></mesh>
@@ -355,7 +289,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     const gutterMatProps = { color: isGutterWood ? '#ffffff' : gutterHex, map: isGutterWood && gutterTexUrl && loadedTextures[gutterTexUrl] ? loadedTextures[gutterTexUrl] : undefined, roughness: 0.6, metalness: 0.5 };
     
     const oX = 0.15; const oZ = 0.15; 
-    const rL = l + (oZ * 2); const rW = w + (oX * 2); 
+    const rL = l + (oZ * 2); const rW = totalW + (oX * 2); 
 
     const { hex: roofHex, isWood: isRoofWood, textureUrl: roofTexUrl } = resolveColor(config.roofColor, colors);
     const { hex: fasciaHex, isWood: isFasciaWood, textureUrl: fasciaTexUrl } = resolveColor(config.roofFlashingColor, colors);
@@ -363,16 +297,10 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     const baseRoofWood = roofTexUrl && loadedTextures[roofTexUrl] ? loadedTextures[roofTexUrl] : trapezTex;
     const baseFasciaWood = fasciaTexUrl && loadedTextures[fasciaTexUrl] ? loadedTextures[fasciaTexUrl] : undefined;
 
-    const renderFasciaMat = (attachName: string) => (
-      <meshStandardMaterial attach={attachName} color={isFasciaWood ? '#ffffff' : fasciaHex} map={isFasciaWood && baseFasciaWood ? baseFasciaWood : undefined} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} />
-    );
-
-    const renderMainRoofMat = (attachName: string) => (
-      <meshStandardMaterial attach={attachName} color={isRoofWood ? '#ffffff' : roofHex} map={isRoofWood ? baseRoofWood : trapezTex} normalMap={isRoofWood ? woodNormal : undefined} normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined} roughness={isRoofWood ? 0.7 : 0.4} metalness={isRoofWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />
-    );
+    const renderFasciaMat = (attachName: string) => <meshStandardMaterial attach={attachName} color={isFasciaWood ? '#ffffff' : fasciaHex} map={isFasciaWood && baseFasciaWood ? baseFasciaWood : undefined} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} />;
+    const renderMainRoofMat = (attachName: string) => <meshStandardMaterial attach={attachName} color={isRoofWood ? '#ffffff' : roofHex} map={isRoofWood ? baseRoofWood : trapezTex} normalMap={isRoofWood ? woodNormal : undefined} normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined} roughness={isRoofWood ? 0.7 : 0.4} metalness={isRoofWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />;
 
     const gutterR = 0.035; const pipeR = 0.025;
-
     const renderGutterPipe = (length: number, rot: [number, number, number], posGutter: [number, number, number], posPipe: [number, number, number], pipeHeight: number) => (
       <group>
         <mesh position={posGutter} rotation={rot} castShadow><cylinderGeometry args={[gutterR, gutterR, length, 16]} /><meshStandardMaterial {...gutterMatProps} /></mesh>
@@ -381,83 +309,60 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     );
 
     if (isDual) {
-      const roofTheta = Math.atan2(slopeH, w/2);
-      const halfRoofW = w/2 + oX;
+      const roofTheta = Math.atan2(slopeH, totalW/2);
       const overlap = 0.08; 
-      const paneLen = halfRoofW / Math.cos(roofTheta) + overlap;
-      
+      const paneLen = (totalW/2 + oX) / Math.cos(roofTheta) + overlap;
       const liftY = (t/2) / Math.cos(roofTheta); 
       const ridgeY = h + slopeH + liftY; 
       const eavesY = h + liftY - Math.tan(roofTheta)*oX;
 
       return (
-        <group>
-          <group position={[0, ridgeY, 0]} rotation={[0, 0, roofTheta]}>
+        <group position={[centerX, ridgeY, 0]}>
+          <group rotation={[0, 0, roofTheta]}>
             <mesh position={[-(paneLen/2 - overlap/2), 0, 0]} castShadow receiveShadow>
               <boxGeometry args={[paneLen, t, rL]} />
-              {renderFasciaMat("material-0")}
-              {renderFasciaMat("material-1")}
-              {renderMainRoofMat("material-2")}
-              {renderFasciaMat("material-3")}
-              {renderFasciaMat("material-4")}
-              {renderFasciaMat("material-5")}
+              {renderFasciaMat("material-0")}{renderFasciaMat("material-1")}{renderMainRoofMat("material-2")}{renderFasciaMat("material-3")}{renderFasciaMat("material-4")}{renderFasciaMat("material-5")}
             </mesh>
           </group>
-          <group position={[0, ridgeY, 0]} rotation={[0, 0, -roofTheta]}>
+          <group rotation={[0, 0, -roofTheta]}>
             <mesh position={[(paneLen/2 - overlap/2), 0, 0]} castShadow receiveShadow>
               <boxGeometry args={[paneLen, t, rL]} />
-              {renderFasciaMat("material-0")}
-              {renderFasciaMat("material-1")}
-              {renderMainRoofMat("material-2")}
-              {renderFasciaMat("material-3")}
-              {renderFasciaMat("material-4")}
-              {renderFasciaMat("material-5")}
+              {renderFasciaMat("material-0")}{renderFasciaMat("material-1")}{renderMainRoofMat("material-2")}{renderFasciaMat("material-3")}{renderFasciaMat("material-4")}{renderFasciaMat("material-5")}
             </mesh>
           </group>
           {showGutters && (
             <>
-              {renderGutterPipe(rL, [Math.PI/2, 0, 0], [-w/2 - oX, eavesY - 0.01, 0], [-w/2 - oX + 0.035, 0, -l/2 - oZ + 0.05], eavesY)}
-              {renderGutterPipe(rL, [Math.PI/2, 0, 0], [ w/2 + oX, eavesY - 0.01, 0], [ w/2 + oX - 0.035, 0, -l/2 - oZ + 0.05], eavesY)}
+              {renderGutterPipe(rL, [Math.PI/2, 0, 0], [-totalW/2 - oX, eavesY - ridgeY - 0.01, 0], [-totalW/2 - oX + 0.035, -ridgeY, -l/2 - oZ + 0.05], eavesY)}
+              {renderGutterPipe(rL, [Math.PI/2, 0, 0], [ totalW/2 + oX, eavesY - ridgeY - 0.01, 0], [ totalW/2 + oX - 0.035, -ridgeY, -l/2 - oZ + 0.05], eavesY)}
             </>
           )}
         </group>
       );
     }
 
-    let roofRotX = 0, roofRotZ = 0;
-    let gutterSystem = null;
-    let paneLenX = rW, paneLenZ = rL;
-    let liftY = 0;
-    let eavesY = h;
+    let roofRotX = 0, roofRotZ = 0; let gutterSystem = null;
+    let paneLenX = rW, paneLenZ = rL; let liftY = 0; let eavesY = h;
 
     if (isFront) {
-      roofRotX = Math.atan2(slopeH, l);
-      liftY = (t/2)/Math.cos(roofRotX);
-      eavesY = h + liftY - Math.tan(roofRotX)*oZ;
+      roofRotX = Math.atan2(slopeH, l); liftY = (t/2)/Math.cos(roofRotX); eavesY = h + liftY - Math.tan(roofRotX)*oZ;
       paneLenZ = (l + oZ*2) / Math.cos(roofRotX);
-      gutterSystem = renderGutterPipe(rW, [0, 0, Math.PI/2], [0, eavesY - 0.01, l/2 + oZ], [w/2 + oX - 0.05, 0, l/2 + oZ - 0.035], eavesY);
+      gutterSystem = renderGutterPipe(rW, [0, 0, Math.PI/2], [0, eavesY - 0.01, l/2 + oZ], [totalW/2 + oX - 0.05, 0, l/2 + oZ - 0.035], eavesY);
     } else if (isBack) {
-      roofRotX = -Math.atan2(slopeH, l);
-      liftY = (t/2)/Math.cos(Math.abs(roofRotX));
-      eavesY = h + liftY - Math.tan(Math.abs(roofRotX))*oZ;
+      roofRotX = -Math.atan2(slopeH, l); liftY = (t/2)/Math.cos(Math.abs(roofRotX)); eavesY = h + liftY - Math.tan(Math.abs(roofRotX))*oZ;
       paneLenZ = (l + oZ*2) / Math.cos(Math.abs(roofRotX));
-      gutterSystem = renderGutterPipe(rW, [0, 0, Math.PI/2], [0, eavesY - 0.01, -l/2 - oZ], [w/2 + oX - 0.05, 0, -l/2 - oZ + 0.035], eavesY);
+      gutterSystem = renderGutterPipe(rW, [0, 0, Math.PI/2], [0, eavesY - 0.01, -l/2 - oZ], [totalW/2 + oX - 0.05, 0, -l/2 - oZ + 0.035], eavesY);
     } else if (isLeft) {
-      roofRotZ = Math.atan2(slopeH, w);
-      liftY = (t/2)/Math.cos(roofRotZ);
-      eavesY = h + liftY - Math.tan(roofRotZ)*oX;
-      paneLenX = (w + oX*2) / Math.cos(roofRotZ);
-      gutterSystem = renderGutterPipe(rL, [Math.PI/2, Math.PI, 0], [-w/2 - oX, eavesY - 0.01, 0], [-w/2 - oX + 0.035, 0, -l/2 - oZ + 0.05], eavesY);
+      roofRotZ = Math.atan2(slopeH, totalW); liftY = (t/2)/Math.cos(roofRotZ); eavesY = h + liftY - Math.tan(roofRotZ)*oX;
+      paneLenX = (totalW + oX*2) / Math.cos(roofRotZ);
+      gutterSystem = renderGutterPipe(rL, [Math.PI/2, Math.PI, 0], [-totalW/2 - oX, eavesY - 0.01, 0], [-totalW/2 - oX + 0.035, 0, -l/2 - oZ + 0.05], eavesY);
     } else if (isRight) {
-      roofRotZ = -Math.atan2(slopeH, w);
-      liftY = (t/2)/Math.cos(Math.abs(roofRotZ));
-      eavesY = h + liftY - Math.tan(Math.abs(roofRotZ))*oX;
-      paneLenX = (w + oX*2) / Math.cos(Math.abs(roofRotZ));
-      gutterSystem = renderGutterPipe(rL, [Math.PI/2, 0, 0], [w/2 + oX, eavesY - 0.01, 0], [w/2 + oX - 0.035, 0, -l/2 - oZ + 0.05], eavesY);
+      roofRotZ = -Math.atan2(slopeH, totalW); liftY = (t/2)/Math.cos(Math.abs(roofRotZ)); eavesY = h + liftY - Math.tan(Math.abs(roofRotZ))*oX;
+      paneLenX = (totalW + oX*2) / Math.cos(Math.abs(roofRotZ));
+      gutterSystem = renderGutterPipe(rL, [Math.PI/2, 0, 0], [totalW/2 + oX, eavesY - 0.01, 0], [totalW/2 + oX - 0.035, 0, -l/2 - oZ + 0.05], eavesY);
     }
 
     const ridgeZ = isFront ? -l/2 - oZ : (isBack ? l/2 + oZ : 0);
-    const ridgeX = isLeft ? w/2 + oX : (isRight ? -w/2 - oX : 0);
+    const ridgeX = isLeft ? maxX + oX : (isRight ? minX - oX : centerX);
     const ridgeY = h + slopeH + liftY;
 
     const zShift = isFront ? paneLenZ/2 : (isBack ? -paneLenZ/2 : 0);
@@ -468,15 +373,10 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
         <group position={[ridgeX, ridgeY, ridgeZ]} rotation={[roofRotX, 0, roofRotZ]}>
           <mesh position={[xShift, 0, zShift]} castShadow receiveShadow>
             <boxGeometry args={[paneLenX, t, paneLenZ]} />
-            {renderFasciaMat("material-0")}
-            {renderFasciaMat("material-1")}
-            {renderMainRoofMat("material-2")}
-            {renderFasciaMat("material-3")}
-            {renderFasciaMat("material-4")}
-            {renderFasciaMat("material-5")}
+            {renderFasciaMat("material-0")}{renderFasciaMat("material-1")}{renderMainRoofMat("material-2")}{renderFasciaMat("material-3")}{renderFasciaMat("material-4")}{renderFasciaMat("material-5")}
           </mesh>
         </group>
-        {showGutters && gutterSystem}
+        {showGutters && <group position={[centerX, 0, 0]}>{gutterSystem}</group>}
       </group>
     );
   };
@@ -487,15 +387,78 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const baseWallWoodHoriz = wallTexUrl && loadedTextures[`${wallTexUrl}_horiz`] ? loadedTextures[`${wallTexUrl}_horiz`] : trapezTexHoriz;
   const activeWallColorMap = isWallWood ? (isWallHorizontal ? baseWallWoodHoriz : baseWallWood) : (isWallHorizontal ? trapezTexHoriz : trapezTex);
   const activeWallNormalMap = isWallWood ? (isWallHorizontal ? woodNormalHoriz : woodNormal) : undefined;
+  
+  const wallMaterialComponent = <meshStandardMaterial map={activeWallColorMap} normalMap={activeWallNormalMap} normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined} color={isWallWood ? '#ffffff' : wallHex} roughness={isWallWood ? 0.7 : 0.4} metalness={isWallWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />;
+
+  const renderCarport = () => {
+    if (!hasCarport || cw === 0) return null;
+
+    const baseRes = resolveColor(config.carportBaseColor || '#333333', colors);
+    const insertRes = resolveColor(config.carportInsertColor || config.gateColor, colors);
+
+    const baseMat = new THREE.MeshStandardMaterial({ color: baseRes.isWood ? '#ffffff' : baseRes.hex, map: baseRes.isWood && loadedTextures[baseRes.textureUrl] ? loadedTextures[baseRes.textureUrl] : undefined, roughness: 0.8, metalness: 0.2 });
+    const insertTex = insertRes.textureUrl && loadedTextures[`${insertRes.textureUrl}_horiz`] ? loadedTextures[`${insertRes.textureUrl}_horiz`] : undefined;
+    const insertMat = new THREE.MeshStandardMaterial({ color: insertRes.isWood ? '#ffffff' : insertRes.hex, map: insertRes.isWood ? insertTex : undefined, normalMap: insertRes.isWood ? woodNormalHoriz : undefined, roughness: insertRes.isWood ? 0.7 : 0.4, metalness: insertRes.isWood ? 0.0 : 0.6 });
+
+    const pillars = []; const pSize = 0.08;
+    pillars.push([cSide === 'right' ? maxX - pSize/2 : minX + pSize/2, h/2, l/2 - pSize/2]); // Front-Outer
+    pillars.push([cSide === 'right' ? maxX - pSize/2 : minX + pSize/2, h/2, -l/2 + pSize/2]); // Back-Outer
+    pillars.push([cSide === 'right' ? w/2 + pSize/2 : -w/2 - pSize/2, h/2, l/2 - pSize/2]); // Front-Inner
+    pillars.push([cSide === 'right' ? w/2 + pSize/2 : -w/2 - pSize/2, h/2, -l/2 + pSize/2]); // Back-Inner
+
+    const slatH = 0.12; const slatGap = 0.04; const step = slatH + slatGap;
+    const numSlats = Math.floor((h - 0.05) / step);
+    const slats = [];
+
+    for (let i = 0; i < numSlats; i++) {
+      const y = i * step + slatH/2 + 0.05;
+      const isInsert = (i === Math.floor(numSlats/2) || i === Math.floor(numSlats/2) - 1);
+      const mat = isInsert ? insertMat : baseMat;
+
+      if (config.carportWalls?.side) {
+        const x = cSide === 'right' ? maxX - pSize/2 : minX + pSize/2;
+        slats.push(<mesh key={`side-${i}`} position={[x, y, 0]} material={mat} castShadow><boxGeometry args={[0.02, slatH, l - pSize*2]} /></mesh>);
+      }
+      if (config.carportWalls?.front) {
+        const x = cSide === 'right' ? w/2 + cw/2 : -w/2 - cw/2;
+        slats.push(<mesh key={`front-${i}`} position={[x, y, l/2 - pSize/2]} material={mat} castShadow><boxGeometry args={[cw - pSize*2, slatH, 0.02]} /></mesh>);
+      }
+      if (config.carportWalls?.back) {
+        const x = cSide === 'right' ? w/2 + cw/2 : -w/2 - cw/2;
+        slats.push(<mesh key={`back-${i}`} position={[x, y, -l/2 + pSize/2]} material={mat} castShadow><boxGeometry args={[cw - pSize*2, slatH, 0.02]} /></mesh>);
+      }
+    }
+
+    const sF = new THREE.Shape();
+    if (cSide === 'right') { sF.moveTo(w/2, h); sF.lineTo(maxX, h); sF.lineTo(maxX, getH(maxX, l/2)); if (isDual && centerX > w/2 && centerX < maxX) sF.lineTo(centerX, getH(centerX, l/2)); sF.lineTo(w/2, getH(w/2, l/2)); } 
+    else { sF.moveTo(minX, h); sF.lineTo(-w/2, h); sF.lineTo(-w/2, getH(-w/2, l/2)); if (isDual && centerX > minX && centerX < -w/2) sF.lineTo(centerX, getH(centerX, l/2)); sF.lineTo(minX, getH(minX, l/2)); }
+    sF.closePath();
+
+    const sB = new THREE.Shape();
+    if (cSide === 'right') { sB.moveTo(w/2, h); sB.lineTo(maxX, h); sB.lineTo(maxX, getH(maxX, -l/2)); if (isDual && centerX > w/2 && centerX < maxX) sB.lineTo(centerX, getH(centerX, -l/2)); sB.lineTo(w/2, getH(w/2, -l/2)); } 
+    else { sB.moveTo(minX, h); sB.lineTo(-w/2, h); sB.lineTo(-w/2, getH(-w/2, -l/2)); if (isDual && centerX > minX && centerX < -w/2) sB.lineTo(centerX, getH(centerX, -l/2)); sB.lineTo(minX, getH(minX, -l/2)); }
+    sB.closePath();
+
+    const sS = new THREE.Shape();
+    sS.moveTo(0, h); sS.lineTo(l, h);
+    if (cSide === 'right') { sS.lineTo(l, getH(maxX, -l/2)); sS.lineTo(0, getH(maxX, l/2)); } 
+    else { sS.lineTo(l, getH(minX, -l/2)); sS.lineTo(0, getH(minX, l/2)); }
+    sS.closePath();
+
+    return (
+      <group>
+        {pillars.map((pos, idx) => <mesh key={`p-${idx}`} position={pos as [number,number,number]} material={baseMat} castShadow><boxGeometry args={[pSize, h, pSize]} /></mesh>)}
+        {slats}
+        <mesh position={[0, 0, l/2 - t]} castShadow><extrudeGeometry args={[sF, wallExtrude]} />{wallMaterialComponent}</mesh>
+        <mesh position={[0, 0, -l/2]} castShadow><extrudeGeometry args={[sB, wallExtrude]} />{wallMaterialComponent}</mesh>
+        <mesh position={[cSide === 'right' ? maxX - t : minX, 0, l/2 - t]} rotation={[0, Math.PI/2, 0]} castShadow><extrudeGeometry args={[sS, wallExtrude]} />{wallMaterialComponent}</mesh>
+      </group>
+    );
+  };
 
   const renderCornerTrim = (xPos: number, zPos: number, hTrim: number) => {
-    const { hex: cornerHex, isWood: isCornerWood, textureUrl: cornerTexUrl } = resolveColor(config?.cornerFlashingColor, colors);
-    return (
-      <mesh position={[xPos, hTrim / 2, zPos]} castShadow>
-        <boxGeometry args={[t + 0.01, hTrim + 0.01, t + 0.01]} />
-        <meshStandardMaterial color={isCornerWood ? '#ffffff' : cornerHex} map={isCornerWood && cornerTexUrl && loadedTextures[cornerTexUrl] ? loadedTextures[cornerTexUrl] : undefined} roughness={0.6} metalness={0.4} />
-      </mesh>
-    );
+    const { hex, isWood, textureUrl } = resolveColor(config?.cornerFlashingColor, colors);
+    return <mesh position={[xPos, hTrim / 2, zPos]} castShadow><boxGeometry args={[t + 0.01, hTrim + 0.01, t + 0.01]} /><meshStandardMaterial color={isWood ? '#ffffff' : hex} map={isWood && textureUrl && loadedTextures[textureUrl] ? loadedTextures[textureUrl] : undefined} roughness={0.6} metalness={0.4} /></mesh>;
   };
 
   return (
@@ -506,43 +469,38 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
       <gridHelper args={[150, 150, '#3a3a3a', '#555555']} position={[0, -0.02, 0]} />
       <ContactShadows resolution={1024} scale={25} blur={2.5} opacity={0.7} far={10} color="#000000" position={[0, 0, 0]} />
       
-      <group name="garageModelGroup">
+      {/* MAGIA: Przesuwamy cały kompleks tak, aby wirtualny środek (garaż + wiata) był idealnie na kamerze */}
+      <group name="garageModelGroup" position={[-centerX, 0, 0]}>
+        
         {showCornerFlashings && (
           <>
-            {renderCornerTrim(-w/2 + t/2, l/2 - t/2, hFL)}
-            {renderCornerTrim(w/2 - t/2, l/2 - t/2, hFR)}
-            {renderCornerTrim(-w/2 + t/2, -l/2 + t/2, hBL)}
-            {renderCornerTrim(w/2 - t/2, -l/2 + t/2, hBR)}
+            {renderCornerTrim(-w/2 + t/2, l/2 - t/2, getH(-w/2, l/2))}
+            {renderCornerTrim(w/2 - t/2, l/2 - t/2, getH(w/2, l/2))}
+            {renderCornerTrim(-w/2 + t/2, -l/2 + t/2, getH(-w/2, -l/2))}
+            {renderCornerTrim(w/2 - t/2, -l/2 + t/2, getH(w/2, -l/2))}
           </>
         )}
 
+        {/* GARAŻ GŁÓWNY (Jego współrzędne wewnątrz grupy pozostają bez zmian) */}
         <group>
-          <mesh position={[0, 0, l / 2 - t]} castShadow receiveShadow>
-            <Geometry><Base><extrudeGeometry args={[frontShape, wallExtrude]} /></Base>{getSubtractions('front')}</Geometry>
-            <meshStandardMaterial map={activeWallColorMap} normalMap={activeWallNormalMap} normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined} color={isWallWood ? '#ffffff' : wallHex} roughness={isWallWood ? 0.7 : 0.4} metalness={isWallWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />
-          </mesh>
+          <mesh position={[0, 0, l / 2 - t]} castShadow receiveShadow><Geometry><Base><extrudeGeometry args={[createGarageFrontShape(), wallExtrude]} /></Base>{getSubtractions('front')}</Geometry>{wallMaterialComponent}</mesh>
           {renderElements('front', [0, 0, l / 2 - t], 0)}
 
-          <mesh position={[0, 0, -l / 2 + t]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
-            <Geometry><Base><extrudeGeometry args={[backShape, wallExtrude]} /></Base>{getSubtractions('back')}</Geometry>
-            <meshStandardMaterial map={activeWallColorMap} normalMap={activeWallNormalMap} normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined} color={isWallWood ? '#ffffff' : wallHex} roughness={isWallWood ? 0.7 : 0.4} metalness={isWallWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />
-          </mesh>
+          <mesh position={[0, 0, -l / 2 + t]} rotation={[0, Math.PI, 0]} castShadow receiveShadow><Geometry><Base><extrudeGeometry args={[createGarageBackShape(), wallExtrude]} /></Base>{getSubtractions('back')}</Geometry>{wallMaterialComponent}</mesh>
           {renderElements('back', [0, 0, -l / 2 + t], Math.PI)}
 
-          <mesh position={[-w / 2, 0, l / 2 - t]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
-            <Geometry><Base><extrudeGeometry args={[leftSideShape, wallExtrude]} /></Base>{getSubtractions('left', true, true)}</Geometry>
-            <meshStandardMaterial map={activeWallColorMap} normalMap={activeWallNormalMap} normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined} color={isWallWood ? '#ffffff' : wallHex} roughness={isWallWood ? 0.7 : 0.4} metalness={isWallWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />
-          </mesh>
+          <mesh position={[-w / 2, 0, l / 2 - t]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow><Geometry><Base><extrudeGeometry args={[createGarageSideShape(false), wallExtrude]} /></Base>{getSubtractions('left', true, true)}</Geometry>{wallMaterialComponent}</mesh>
           {renderElements('left', [-w / 2, 0, l / 2 - t], Math.PI / 2, true, true)}
 
-          <mesh position={[w / 2 - t, 0, l / 2 - t]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
-            <Geometry><Base><extrudeGeometry args={[rightSideShape, wallExtrude]} /></Base>{getSubtractions('right', true, false)}</Geometry>
-            <meshStandardMaterial map={activeWallColorMap} normalMap={activeWallNormalMap} normalScale={isWallWood ? new THREE.Vector2(1.5, 1.5) : undefined} color={isWallWood ? '#ffffff' : wallHex} roughness={isWallWood ? 0.7 : 0.4} metalness={isWallWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />
-          </mesh>
+          <mesh position={[w / 2 - t, 0, l / 2 - t]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow><Geometry><Base><extrudeGeometry args={[createGarageSideShape(true), wallExtrude]} /></Base>{getSubtractions('right', true, false)}</Geometry>{wallMaterialComponent}</mesh>
           {renderElements('right', [w / 2 - t, 0, l / 2 - t], Math.PI / 2, true, false)}
 
           {renderRoof()}
         </group>
+
+        {/* NOWY ELEMENT: WIATA */}
+        {renderCarport()}
+
       </group>
     </>
   );
