@@ -218,6 +218,60 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const gates = config.elements.filter(e => e.type === 'gate');
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
+  // FUNKCJA ZAKUPU
+  const handleCheckout = () => {
+    if (!region) {
+      alert('Proszę wybrać województwo przed przejściem do płatności.');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // 1. Dynamiczne pobranie ID z ustawień WordPress
+      const productId = appData.wooProductId || appData.productId || 19;
+      
+      // 2. Bezpieczna kompresja danych konfiguracyjnych (rozwiązuje ewentualne problemy z polskimi znakami)
+      const configString = JSON.stringify(config);
+      const encodedConfig = btoa(unescape(encodeURIComponent(configString)));
+      
+      // 3. Budowanie wskazanego przez Ciebie adresu URL
+      const targetUrl = new URL('https://konfigurator.skillup-szkolenia.pl/');
+      targetUrl.searchParams.set('page_id', '8');
+      
+      // Funkcja WooCommerce do bezpośredniego dorzucenia produktu do koszyka
+      targetUrl.searchParams.set('add-to-cart', String(productId));
+      
+      // Przekazanie dodatkowych danych do wtyczki
+      targetUrl.searchParams.set('price', String(calculatedPrice));
+      targetUrl.searchParams.set('region', region);
+      targetUrl.searchParams.set('config', encodedConfig);
+
+      // Cichy fallback: na wypadek gdyby Twoja wtyczka nasłuchiwała po stronie iframe'a
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          action: 'konfigurator_checkout',
+          config: config,
+          price: calculatedPrice,
+          region: region,
+          productId: productId
+        }, '*');
+      }
+
+      // 4. Bezpośrednie przekierowanie (używamy window.top by wyjść z ramki iframe i załadować sklep)
+      if (window.top) {
+        window.top.location.href = targetUrl.toString();
+      } else {
+        window.location.href = targetUrl.toString();
+      }
+
+    } catch (error) {
+      console.error('Błąd podczas finalizacji zamówienia:', error);
+      alert('Wystąpił problem z przekierowaniem przeglądarki. Spróbuj ponownie.');
+      setIsProcessing(false);
+    }
+  };
+
   const InlineColorSelector = () => (
     <div className="p-4 bg-zinc-950 border-t border-zinc-800 shadow-inner animate-in slide-in-from-top-2 duration-200">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -248,64 +302,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       </div>
     </div>
   );
-
-  const handleCheckout = () => {
-    if (!region) {
-      alert('Proszę wybrać województwo przed przejściem do płatności.');
-      return;
-    }
-
-    setIsProcessing(true);
-
-    // Budujemy pełną paczkę zamówienia (teraz zawiera też konfigurację wiaty)
-    const orderData = {
-      action: 'konfigurator_checkout', // Standardowy klucz dla wtyczek odbierających message
-      config: config,
-      price: calculatedPrice,
-      region: region,
-      productId: appData.wooProductId || 19
-    };
-
-    try {
-      // Vercel działa wewnątrz iFrame (okna) na stronie WordPress.
-      // Używamy postMessage, aby bezpiecznie wypchnąć zamówienie do wtyczki na WP.
-      if (window.parent !== window) {
-        window.parent.postMessage(orderData, '*');
-        
-        // WordPress po przechwyceniu wiadomości powinien wykonać redirect.
-        // Zwalniamy przycisk po kilku sekundach na wypadek, gdyby przeładowanie strony trwało dłużej.
-        setTimeout(() => setIsProcessing(false), 3000);
-      } 
-      // Zapasowy wariant z Fetch, gdyby wtyczka miała jednak odblokowane REST API
-      else if (appData.apiUrl) {
-        fetch(appData.apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(orderData),
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.redirectUrl || data.checkout_url) {
-            window.location.href = data.redirectUrl || data.checkout_url;
-          } else {
-             throw new Error('Brak adresu przekierowania z serwera');
-          }
-        })
-        .catch(err => {
-          console.error(err);
-          alert('Serwer nie odpowiedział poprawnie. Sprawdź logi w WordPress.');
-          setIsProcessing(false);
-        });
-      } else {
-        alert('Ta aplikacja musi być uruchomiona z poziomu strony głównej sklepu.');
-        setIsProcessing(false);
-      }
-    } catch (error) {
-      console.error('Błąd transmisji danych:', error);
-      alert('Wystąpił nieoczekiwany problem z przeglądarką. Odśwież stronę i spróbuj ponownie.');
-      setIsProcessing(false);
-    }
-  };
 
   return (
     <div className="pb-12">
@@ -703,7 +699,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           disabled={isProcessing}
           className="w-full font-bold py-4 px-6 rounded-xl text-lg uppercase transition-all shadow-md bg-[var(--theme)] hover:opacity-90 text-white cursor-pointer disabled:opacity-50 flex justify-center items-center gap-2"
         >
-          {isProcessing ? 'Przetwarzanie...' : 'Kupuję i płacę'}
+          {isProcessing ? 'Przekierowywanie do kasy...' : 'Kupuję i płacę'}
         </button>
       </div>
     </div>
