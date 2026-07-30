@@ -219,6 +219,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
   // FUNKCJA ZAKUPU
+  // FUNKCJA ZAKUPU
   const handleCheckout = () => {
     if (!region) {
       alert('Proszę wybrać województwo przed przejściem do płatności.');
@@ -231,13 +232,13 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       // 1. Dynamiczne pobranie ID z ustawień WordPress
       const productId = appData.wooProductId || appData.productId || 19;
       
-      // 2. Bezpieczna kompresja danych konfiguracyjnych (rozwiązuje ewentualne problemy z polskimi znakami)
+      // 2. Bezpieczna kompresja danych konfiguracyjnych
       const configString = JSON.stringify(config);
       const encodedConfig = btoa(unescape(encodeURIComponent(configString)));
       
-      // 3. Budowanie wskazanego przez Ciebie adresu URL
+      // 3. Budowanie zaktualizowanego adresu URL (page_id=9)
       const targetUrl = new URL('https://konfigurator.skillup-szkolenia.pl/');
-      targetUrl.searchParams.set('page_id', '8');
+      targetUrl.searchParams.set('page_id', '9'); // Poprawiony link
       
       // Funkcja WooCommerce do bezpośredniego dorzucenia produktu do koszyka
       targetUrl.searchParams.set('add-to-cart', String(productId));
@@ -247,7 +248,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       targetUrl.searchParams.set('region', region);
       targetUrl.searchParams.set('config', encodedConfig);
 
-      // Cichy fallback: na wypadek gdyby Twoja wtyczka nasłuchiwała po stronie iframe'a
+      // Wypchnięcie danych (w tym ceny) do WordPressa - to jest kluczowe dla zakładki BIM
       if (window.parent !== window) {
         window.parent.postMessage({
           action: 'konfigurator_checkout',
@@ -258,12 +259,16 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         }, '*');
       }
 
-      // 4. Bezpośrednie przekierowanie (używamy window.top by wyjść z ramki iframe i załadować sklep)
-      if (window.top) {
-        window.top.location.href = targetUrl.toString();
-      } else {
-        window.location.href = targetUrl.toString();
-      }
+      // 4. Bezpośrednie przekierowanie Z OPÓŹNIENIEM.
+      // Dajemy wtyczce WP 800 milisekund na przetworzenie eventu postMessage 
+      // i zaktualizowanie ceny w WooCommerce zanim przeładujemy okno.
+      setTimeout(() => {
+        if (window.top) {
+          window.top.location.href = targetUrl.toString();
+        } else {
+          window.location.href = targetUrl.toString();
+        }
+      }, 800);
 
     } catch (error) {
       console.error('Błąd podczas finalizacji zamówienia:', error);
