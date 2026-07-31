@@ -301,10 +301,12 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     const renderMainRoofMat = (attachName: string) => <meshStandardMaterial attach={attachName} color={isRoofWood ? '#ffffff' : roofHex} map={isRoofWood ? baseRoofWood : trapezTex} normalMap={isRoofWood ? woodNormal : undefined} normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined} roughness={isRoofWood ? 0.7 : 0.4} metalness={isRoofWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />;
 
     const gutterR = 0.035; const pipeR = 0.025;
+    
+    // TUTAJ ZNAJDOWAŁ SIĘ BŁĄD. DODANO `posPipe[1]` DO OBLICZEŃ POZYCJI Y DLA RURY SPUSTOWEJ.
     const renderGutterPipe = (length: number, rot: [number, number, number], posGutter: [number, number, number], posPipe: [number, number, number], pipeHeight: number) => (
       <group>
         <mesh position={posGutter} rotation={rot} castShadow><cylinderGeometry args={[gutterR, gutterR, length, 16]} /><meshStandardMaterial {...gutterMatProps} /></mesh>
-        <mesh position={[posPipe[0], pipeHeight/2, posPipe[2]]} castShadow><cylinderGeometry args={[pipeR, pipeR, pipeHeight, 16]} /><meshStandardMaterial {...gutterMatProps} /></mesh>
+        <mesh position={[posPipe[0], posPipe[1] + pipeHeight/2, posPipe[2]]} castShadow><cylinderGeometry args={[pipeR, pipeR, pipeHeight, 16]} /><meshStandardMaterial {...gutterMatProps} /></mesh>
       </group>
     );
 
