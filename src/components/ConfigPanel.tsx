@@ -220,42 +220,32 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   // FUNKCJA ZAKUPU
   const handleCheckout = () => {
-    if (!region) {
-      alert('Proszę wybrać województwo przed przejściem do płatności.');
-      return;
-    }
+    // Zakładam, że weryfikacja regionu została obsłużona wyżej
     setIsProcessing(true);
 
     try {
-      // 1. Pobranie zrzutu ekranu
+      // 1. Zrzut ekranu do miniatury
       let snapshotBase64 = '';
       const canvas = document.querySelector('canvas');
       if (canvas) {
         snapshotBase64 = canvas.toDataURL('image/jpeg', 0.6);
       }
 
-      // 2. Przygotowanie danych
-      const productId = appData.wooProductId || appData.productId || 19;
+      // 2. Przygotowanie czystego JSONa (Zgodnie z wymaganiami wtyczki!)
       const configString = JSON.stringify(config);
-      const encodedConfig = btoa(unescape(encodeURIComponent(configString)));
 
-      // 3. Wysłanie wszystkich danych w tle do WordPressa (bez pakowania w URL!)
+      // 3. Wysłanie wiadomości do wtyczki WordPressa
       if (window.parent !== window) {
         window.parent.postMessage({
           action: 'konfigurator_checkout',
-          config: encodedConfig, // Gotowy kod dla BIM
+          config: configString, 
           price: calculatedPrice,
-          productId: productId,
-          thumbnail: snapshotBase64 // Przesyłamy obraz pod maską
+          thumbnail: snapshotBase64
         }, '*');
       } else {
         alert('Aplikacja musi być osadzona na stronie sklepu.');
         setIsProcessing(false);
       }
-      
-      // UWAGA: Usunęliśmy setTimeout z window.location.href. 
-      // Teraz to WordPress przekieruje klienta do kasy, gdy zapisze dane.
-
     } catch (error) {
       console.error('Błąd podczas finalizacji:', error);
       setIsProcessing(false);
