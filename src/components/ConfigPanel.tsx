@@ -1,7 +1,7 @@
 "use client";
 
 import { GarageConfig, RoofType, WallFace, GarageElement, GateType, SheetProfile } from '@/types';
-import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2, Settings, Smartphone } from 'lucide-react';
+import { Home, Maximize, PaintBucket, Plus, Trash2, BoxSelect, Layers, ChevronDown, Edit2, Settings, Smartphone, Eye } from 'lucide-react';
 import { findValidPosition } from '@/lib/collision';
 import { v4 as uuidv4 } from 'uuid';
 import React, { useMemo, useState, Dispatch, SetStateAction } from 'react';
@@ -15,6 +15,8 @@ interface ConfigPanelProps {
   isGeneratingAR?: boolean;
   setIsGeneratingAR?: Dispatch<SetStateAction<boolean>>;
   isReadOnly?: boolean; 
+  activeDimId?: string | null;
+  setActiveDimId?: Dispatch<SetStateAction<string | null>>;
 }
 
 const WOJEWODZTWA = ["Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubuskie", "Łódzkie", "Małopolskie", "Mazowieckie", "Opolskie", "Podkarpackie", "Podlaskie", "Pomorskie", "Śląskie", "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"];
@@ -44,7 +46,7 @@ const RoofIcon = ({ type }: { type: RoofType }) => {
   );
 };
 
-export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData, isGeneratingAR, setIsGeneratingAR, isReadOnly = false }: ConfigPanelProps) {
+export default function ConfigPanel({ config, setConfig, selectedWall, setSelectedWall, appData, isGeneratingAR, setIsGeneratingAR, isReadOnly = false, activeDimId, setActiveDimId }: ConfigPanelProps) {
   const [activeColorEdit, setActiveColorEdit] = useState<string | null>(null);
   const [region, setRegion] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -201,7 +203,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   };
 
   const updateElement = (id: string, updates: Partial<GarageElement>) => {
-    // Pozwalamy na otwarcie bramy nawet w trybie read-only, bo to pomaga w podglądzie
     if (isReadOnly && !updates.hasOwnProperty('isOpen')) return; 
 
     setConfig(prev => {
@@ -388,9 +389,21 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         {config.roofType === 'slope-front' && <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">⚠️ Dach spadowy w przód — max. wysokość bramy ograniczona.</div>}
 
         {gates.map((gate, i) => (
-          <div key={gate.id} className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-3">
+          <div key={gate.id} className={`bg-white p-4 rounded-xl border-2 transition-all shadow-sm mb-3 ${activeDimId === gate.id ? 'border-[var(--theme)]' : 'border-zinc-200'}`}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-zinc-800">Brama #{i+1}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-zinc-800">Brama #{i+1}</h3>
+                <button 
+                  onClick={() => {
+                    setSelectedWall(gate.wall);
+                    setActiveDimId?.(activeDimId === gate.id ? null : gate.id);
+                  }} 
+                  className={`p-1.5 rounded-lg transition-colors shadow-sm ${activeDimId === gate.id ? 'bg-[var(--theme)] text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-[var(--theme)]'}`} 
+                  title="Pokaż wymiary na modelu 3D"
+                >
+                  <Eye size={16} />
+                </button>
+              </div>
               <select disabled={isReadOnly} value={gate.gateType} onChange={(e) => { setSelectedWall('front'); updateElement(gate.id, { gateType: e.target.value as GateType, isOpen: false }); }} className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50 disabled:opacity-80">
                 <option value="up-and-over">Uchylna</option><option value="swing">Dwuskrzydłowa</option><option value="sectional">Segmentowa</option>
               </select>
@@ -467,11 +480,25 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               const maxY = Math.max(0, config.height - el.height);
 
               return (
-                <div key={el.id} className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm relative group">
+                <div key={el.id} className={`bg-white p-4 rounded-xl border-2 transition-all shadow-sm relative group ${activeDimId === el.id ? 'border-[var(--theme)]' : 'border-zinc-200'}`}>
                   {!isReadOnly && (
                     <button onClick={() => removeElement(el.id)} className="absolute top-4 right-4 text-red-400 hover:text-red-600"><Trash2 size={18} /></button>
                   )}
-                  <h3 className="font-semibold text-zinc-800 mb-4 capitalize">{el.type === 'door' ? 'Drzwi' : el.type === 'skylight' ? 'Świetlik (pleksa)' : 'Okno'} #{idx + 1}</h3>
+                  
+                  <div className="flex items-center gap-2 mb-4">
+                    <h3 className="font-semibold text-zinc-800 capitalize">{el.type === 'door' ? 'Drzwi' : el.type === 'skylight' ? 'Świetlik (pleksa)' : 'Okno'} #{idx + 1}</h3>
+                    <button 
+                      onClick={() => {
+                        setSelectedWall(el.wall);
+                        setActiveDimId?.(activeDimId === el.id ? null : el.id);
+                      }} 
+                      className={`p-1.5 rounded-lg transition-colors shadow-sm ${activeDimId === el.id ? 'bg-[var(--theme)] text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-[var(--theme)]'}`} 
+                      title="Pokaż wymiary na modelu 3D"
+                    >
+                      <Eye size={16} />
+                    </button>
+                  </div>
+
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4 mb-2">
                       <div>

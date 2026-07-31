@@ -93,13 +93,11 @@ export default function Home() {
 
     if (savedConfigBase64) {
       try {
-        // Skuteczne dekodowanie Base64 z obsługą polskich znaków (UTF-8)
         const decodedJson = decodeURIComponent(escape(window.atob(decodeURIComponent(savedConfigBase64))));
         const parsedConfig = JSON.parse(decodedJson);
         
         setConfig(parsedConfig);
         setIsReadOnly(true);
-        // USUNIĘTO: if (!appData) setAppData(FALLBACK_DATA); - Ta linijka resetowała kolory do zera przed ich załadowaniem.
       } catch (e) { 
         console.error("Błąd dekodowania BIM:", e); 
       }
@@ -177,7 +175,7 @@ export default function Home() {
             <div className="absolute top-6 left-6 pointer-events-none z-10">
               <div className="bg-zinc-900/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-zinc-800 shadow-2xl">
                 <h1 className="text-2xl font-black text-white tracking-tight uppercase">Podgląd Produkcyjny <span className="text-[var(--theme)]">3D</span></h1>
-                <p className="text-zinc-400 text-sm mt-1">Rozwiń sekcje w panelu, by sprawdzić specyfikację zamówienia.</p>
+                <p className="text-zinc-400 text-sm mt-1">Rozwiń sekcje w panelu i kliknij ikonę oka przy elemencie, by sprawdzić wymiary.</p>
               </div>
             </div>
           )}
@@ -226,6 +224,8 @@ export default function Home() {
                 isGeneratingAR={isGeneratingAR} 
                 setIsGeneratingAR={setIsGeneratingAR} 
                 isReadOnly={isReadOnly}
+                activeDimId={activeDimId} 
+                setActiveDimId={setActiveDimId}
               />
             )}
           </div>
