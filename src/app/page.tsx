@@ -108,7 +108,7 @@ export default function Home() {
         console.error("Błąd dekodowania BIM:", e); 
       }
     }
-  }, [appData]);
+  }, []);
 
   const handleScroll = (e: UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
