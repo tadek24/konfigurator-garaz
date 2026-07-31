@@ -93,14 +93,22 @@ export default function Home() {
 
     if (savedConfigBase64) {
       try {
-        const decoded = atob(decodeURIComponent(savedConfigBase64));
-        const utf8 = new TextDecoder("utf-8").decode(Uint8Array.from(decoded, c => c.charCodeAt(0)));
-        setConfig(JSON.parse(utf8));
+        // --- TUTAJ ZNAJDUJE SIĘ POPRAWKA DEKODOWANIA ---
+        const base64Clean = decodeURIComponent(savedConfigBase64);
+        const decodedStr = decodeURIComponent(
+          atob(base64Clean).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join('')
+        );
+        
+        setConfig(JSON.parse(decodedStr));
         setIsReadOnly(true);
         if (!appData) setAppData(FALLBACK_DATA); 
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+        console.error("Błąd dekodowania BIM:", e); 
+      }
     }
-  }, []);
+  }, [appData]);
 
   const handleScroll = (e: UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
