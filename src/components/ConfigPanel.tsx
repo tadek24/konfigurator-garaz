@@ -219,65 +219,45 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
   // FUNKCJA ZAKUPU
-  // FUNKCJA ZAKUPU
-  // FUNKCJA ZAKUPU
   const handleCheckout = () => {
     if (!region) {
       alert('Proszę wybrać województwo przed przejściem do płatności.');
       return;
     }
-
     setIsProcessing(true);
 
     try {
-      // 1. Zrzut ekranu modelu 3D z elementu canvas
+      // 1. Pobranie zrzutu ekranu
       let snapshotBase64 = '';
       const canvas = document.querySelector('canvas');
       if (canvas) {
-        snapshotBase64 = canvas.toDataURL('image/jpeg', 0.6); // Kompresja do JPG
+        snapshotBase64 = canvas.toDataURL('image/jpeg', 0.6);
       }
 
-      // 2. Pobranie ID i bezpieczna kompresja konfiguracji pod przycisk BIM
+      // 2. Przygotowanie danych
       const productId = appData.wooProductId || appData.productId || 19;
       const configString = JSON.stringify(config);
       const encodedConfig = btoa(unescape(encodeURIComponent(configString)));
-      
-      // 3. Budowanie zaktualizowanego adresu URL
-      const targetUrl = new URL('https://konfigurator.skillup-szkolenia.pl/');
-      targetUrl.searchParams.set('page_id', '9');
-      targetUrl.searchParams.set('clear-cart', 'true'); // Wymusza czyszczenie koszyka
-      targetUrl.searchParams.set('add-to-cart', String(productId));
-      
-      // Dodajemy dane do URL, aby WordPress na pewno je przechwycił do przycisku BIM
-      targetUrl.searchParams.set('price', String(calculatedPrice));
-      targetUrl.searchParams.set('region', region);
-      targetUrl.searchParams.set('config', encodedConfig);
 
-      // 4. Wypchnięcie danych (w tym dużego obrazka) przez postMessage do WP
+      // 3. Wysłanie wszystkich danych w tle do WordPressa (bez pakowania w URL!)
       if (window.parent !== window) {
         window.parent.postMessage({
           action: 'konfigurator_checkout',
-          config: config,
-          encodedConfig: encodedConfig,
+          config: encodedConfig, // Gotowy kod dla BIM
           price: calculatedPrice,
-          region: region,
           productId: productId,
-          thumbnail: snapshotBase64 // Miniaturę puszczamy bokiem, by nie zapchać paska adresu
+          thumbnail: snapshotBase64 // Przesyłamy obraz pod maską
         }, '*');
+      } else {
+        alert('Aplikacja musi być osadzona na stronie sklepu.');
+        setIsProcessing(false);
       }
-
-      // 5. Opóźnione przekierowanie - dajemy wtyczce 1 sekundę na zapisanie sesji
-      setTimeout(() => {
-        if (window.top) {
-          window.top.location.href = targetUrl.toString();
-        } else {
-          window.location.href = targetUrl.toString();
-        }
-      }, 1000);
+      
+      // UWAGA: Usunęliśmy setTimeout z window.location.href. 
+      // Teraz to WordPress przekieruje klienta do kasy, gdy zapisze dane.
 
     } catch (error) {
-      console.error('Błąd podczas finalizacji zamówienia:', error);
-      alert('Wystąpił problem z przekierowaniem przeglądarki. Spróbuj ponownie.');
+      console.error('Błąd podczas finalizacji:', error);
       setIsProcessing(false);
     }
   };
