@@ -220,6 +220,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   // FUNKCJA ZAKUPU
   // FUNKCJA ZAKUPU
+  // FUNKCJA ZAKUPU
   const handleCheckout = () => {
     if (!region) {
       alert('Proszę wybrać województwo przed przejściem do płatności.');
@@ -229,46 +230,50 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     setIsProcessing(true);
 
     try {
-      // 1. Dynamiczne pobranie ID z ustawień WordPress
+      // 1. Zrzut ekranu modelu 3D z elementu canvas
+      let snapshotBase64 = '';
+      const canvas = document.querySelector('canvas');
+      if (canvas) {
+        snapshotBase64 = canvas.toDataURL('image/jpeg', 0.6); // Kompresja do JPG
+      }
+
+      // 2. Pobranie ID i bezpieczna kompresja konfiguracji pod przycisk BIM
       const productId = appData.wooProductId || appData.productId || 19;
-      
-      // 2. Bezpieczna kompresja danych konfiguracyjnych
       const configString = JSON.stringify(config);
       const encodedConfig = btoa(unescape(encodeURIComponent(configString)));
       
-      // 3. Budowanie zaktualizowanego adresu URL (page_id=9)
+      // 3. Budowanie zaktualizowanego adresu URL
       const targetUrl = new URL('https://konfigurator.skillup-szkolenia.pl/');
-      targetUrl.searchParams.set('page_id', '9'); // Poprawiony link
-      
-      // Funkcja WooCommerce do bezpośredniego dorzucenia produktu do koszyka
+      targetUrl.searchParams.set('page_id', '9');
+      targetUrl.searchParams.set('clear-cart', 'true'); // Wymusza czyszczenie koszyka
       targetUrl.searchParams.set('add-to-cart', String(productId));
       
-      // Przekazanie dodatkowych danych do wtyczki
+      // Dodajemy dane do URL, aby WordPress na pewno je przechwycił do przycisku BIM
       targetUrl.searchParams.set('price', String(calculatedPrice));
       targetUrl.searchParams.set('region', region);
       targetUrl.searchParams.set('config', encodedConfig);
 
-      // Wypchnięcie danych (w tym ceny) do WordPressa - to jest kluczowe dla zakładki BIM
+      // 4. Wypchnięcie danych (w tym dużego obrazka) przez postMessage do WP
       if (window.parent !== window) {
         window.parent.postMessage({
           action: 'konfigurator_checkout',
           config: config,
+          encodedConfig: encodedConfig,
           price: calculatedPrice,
           region: region,
-          productId: productId
+          productId: productId,
+          thumbnail: snapshotBase64 // Miniaturę puszczamy bokiem, by nie zapchać paska adresu
         }, '*');
       }
 
-      // 4. Bezpośrednie przekierowanie Z OPÓŹNIENIEM.
-      // Dajemy wtyczce WP 800 milisekund na przetworzenie eventu postMessage 
-      // i zaktualizowanie ceny w WooCommerce zanim przeładujemy okno.
+      // 5. Opóźnione przekierowanie - dajemy wtyczce 1 sekundę na zapisanie sesji
       setTimeout(() => {
         if (window.top) {
           window.top.location.href = targetUrl.toString();
         } else {
           window.location.href = targetUrl.toString();
         }
-      }, 800);
+      }, 1000);
 
     } catch (error) {
       console.error('Błąd podczas finalizacji zamówienia:', error);
