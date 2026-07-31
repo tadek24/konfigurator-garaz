@@ -75,8 +75,8 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
   const offset = 0.05; 
   if (el.wall === 'front') { pos = [elX, elY + elH/2, l/2 + offset]; }
   else if (el.wall === 'back') { pos = [-elX, elY + elH/2, -l/2 - offset]; rot = [0, Math.PI, 0]; }
-  else if (el.wall === 'left') { pos = [-w/2 - offset, elY + elH/2, -elX]; rot = [0, -Math.PI/2, 0]; }
-  else if (el.wall === 'right') { pos = [w/2 + offset, elY + elH/2, elX]; rot = [0, Math.PI/2, 0]; }
+  else if (el.wall === 'left') { pos = [-w/2 - offset, elY + elH/2, elX]; rot = [0, -Math.PI/2, 0]; }
+  else if (el.wall === 'right') { pos = [w/2 + offset, elY + elH/2, -elX]; rot = [0, Math.PI/2, 0]; }
 
   return (
     <group position={pos} rotation={rot}>
@@ -92,7 +92,6 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
   );
 }
 
-// 4. BEZPIECZNY EKSPORTER DO AR (.glb) - Wykorzystuje opóźnienie i asynchroniczny import modułu
 function ARExporter({ isGenerating, onExport }: { isGenerating: boolean; onExport: (url: string) => void }) {
   const { scene } = useThree();
 
@@ -128,7 +127,6 @@ function ARExporter({ isGenerating, onExport }: { isGenerating: boolean; onExpor
       }
     };
 
-    // Dajemy Reactowi 500ms na załadowanie UI z animacją ładowania
     setTimeout(performExport, 500);
 
   }, [isGenerating, scene, onExport]);
@@ -136,10 +134,8 @@ function ARExporter({ isGenerating, onExport }: { isGenerating: boolean; onExpor
   return null;
 }
 
-// 5. GŁÓWNE PŁÓTNO
 export default function CanvasArea({ config, selectedWall, activeDimId, colors = [], isGeneratingAR = false, onExportAR }: CanvasAreaProps) {
   return (
-    // Parametr typowania cieni (THREE.PCFShadowMap) rozwiązuje żółte ostrzeżenie w konsoli
     <Canvas gl={{ preserveDrawingBuffer: true }} shadows={{ type: THREE.PCFShadowMap as any }} camera={{ position: [5, 3, 7], fov: 50 }} className="w-full h-full">
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 15, 10]} intensity={1.5} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} shadow-bias={-0.0005} shadow-camera-left={-15} shadow-camera-right={15} shadow-camera-top={15} shadow-camera-bottom={-15} />

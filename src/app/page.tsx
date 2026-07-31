@@ -99,12 +99,12 @@ export default function Home() {
         
         setConfig(parsedConfig);
         setIsReadOnly(true);
-        if (!appData) setAppData(FALLBACK_DATA); 
+        // USUNIĘTO: if (!appData) setAppData(FALLBACK_DATA); - Ta linijka resetowała kolory do zera przed ich załadowaniem.
       } catch (e) { 
         console.error("Błąd dekodowania BIM:", e); 
       }
     }
-  }, []); // <-- Pusta tablica powstrzyma pętlę i zablokowany konfigurator
+  }, []);
 
   const handleScroll = (e: UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
@@ -177,7 +177,7 @@ export default function Home() {
             <div className="absolute top-6 left-6 pointer-events-none z-10">
               <div className="bg-zinc-900/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-zinc-800 shadow-2xl">
                 <h1 className="text-2xl font-black text-white tracking-tight uppercase">Podgląd Produkcyjny <span className="text-[var(--theme)]">3D</span></h1>
-                <p className="text-zinc-400 text-sm mt-1">Kliknij element w panelu obok, aby zlokalizować go na bryle.</p>
+                <p className="text-zinc-400 text-sm mt-1">Rozwiń sekcje w panelu, by sprawdzić specyfikację zamówienia.</p>
               </div>
             </div>
           )}
@@ -209,63 +209,32 @@ export default function Home() {
             </div>
           )}
 
-          {isReadOnly ? (
-            <>
-              <div className="p-6 bg-zinc-50 border-b border-zinc-200"><h2 className="text-xl font-bold text-zinc-900">Specyfikacja Konstrukcji</h2></div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-                <div>
-                  <h3 className="text-xs font-black text-[var(--theme)] uppercase tracking-widest mb-4">Wymiary Główne Rzutu</h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-center"><span className="block text-xs text-zinc-500 font-bold mb-1">SZEROKOŚĆ</span><span className="text-xl font-black text-zinc-900">{config.width} cm</span></div>
-                    <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-center"><span className="block text-xs text-zinc-500 font-bold mb-1">DŁUGOŚĆ</span><span className="text-xl font-black text-zinc-900">{config.length} cm</span></div>
-                    <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-center"><span className="block text-xs text-zinc-500 font-bold mb-1">WYSOKOŚĆ</span><span className="text-xl font-black text-zinc-900">{config.height} cm</span></div>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-xs font-black text-[var(--theme)] uppercase tracking-widest mb-4">Materiały i Wykończenie</h3>
-                  <ul className="space-y-3">
-                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-3 rounded-xl shadow-sm"><span className="text-sm font-bold text-zinc-600">Poszycie Ścian</span><div className="flex items-center gap-2"><span className="font-bold text-zinc-900">{config.wallProfile}</span></div></li>
-                    <li className="flex justify-between items-center bg-white border border-zinc-200 p-3 rounded-xl shadow-sm"><span className="text-sm font-bold text-zinc-600">Rodzaj Dachu</span><div className="flex items-center gap-2"><span className="font-bold text-zinc-900">{config.roofProfile} ({config.roofType})</span></div></li>
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="text-xs font-black text-[var(--theme)] uppercase tracking-widest mb-4">Rozkład Elementów</h3>
-                  {config.elements.length === 0 ? <p className="text-sm text-zinc-400 italic">Brak dodatkowych otworów.</p> : (
-                    <div className="space-y-3">
-                      {config.elements.map((el) => {
-                        const isActive = activeDimId === el.id;
-                        return (
-                          <button key={el.id} onClick={() => { setSelectedWall(el.wall); setActiveDimId(isActive ? null : el.id); }} className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center justify-between group ${isActive ? 'bg-[var(--theme)] border-[var(--theme)] shadow-lg scale-[1.02]' : 'bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'}`}>
-                            <div><div className={`font-black uppercase text-lg ${isActive ? 'text-white' : 'text-zinc-900'}`}>{el.type === 'gate' ? 'Brama' : el.type === 'door' ? 'Drzwi B.' : el.type === 'skylight' ? 'Świetlik' : 'Okno'}</div><div className={`text-sm font-medium mt-1 ${isActive ? 'text-white/80' : 'text-zinc-500'}`}>Ściana: <span className="font-bold uppercase">{el.wall}</span></div></div>
-                            <div className="flex flex-col items-end gap-2"><span className={`px-3 py-1 rounded-lg text-sm font-black ${isActive ? 'bg-white text-[var(--theme)]' : 'bg-zinc-100 text-zinc-900'}`}>{el.width} x {el.height}</span><Eye size={20} className={`${isActive ? 'text-white' : 'text-zinc-300 group-hover:text-[var(--theme)]'}`} /></div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="pt-4 border-t"><a href={wpAdminUrl || "#"} className="w-full flex justify-center items-center py-4 font-bold bg-zinc-950 text-white hover:bg-zinc-900 transition-colors">← Wróć do zamówień</a></div>
-            </>
-          ) : (
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar scroll-smooth" onScroll={handleScroll}>
-              {appData?.activeType === 'carport' ? (
-                <CarportConfigPanel config={config} setConfig={setConfig} appData={appData} />
-              ) : appData?.activeType === 'pergola' ? (
-                <PergolaConfigPanel config={config} setConfig={setConfig} appData={appData} />
-              ) : appData?.activeType === 'trash' ? (
-                <TrashConfigPanel config={config} setConfig={setConfig} selectedWall={selectedWall} setSelectedWall={setSelectedWall} appData={appData} isGeneratingAR={isGeneratingAR} setIsGeneratingAR={setIsGeneratingAR} />
-              ) : (
-                <ConfigPanel 
-                  config={config} 
-                  setConfig={setConfig} 
-                  selectedWall={selectedWall} 
-                  setSelectedWall={setSelectedWall} 
-                  appData={appData} 
-                  isGeneratingAR={isGeneratingAR} 
-                  setIsGeneratingAR={setIsGeneratingAR} 
-                />
-              )}
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar scroll-smooth" onScroll={handleScroll}>
+            {appData?.activeType === 'carport' ? (
+              <CarportConfigPanel config={config} setConfig={setConfig} appData={appData} />
+            ) : appData?.activeType === 'pergola' ? (
+              <PergolaConfigPanel config={config} setConfig={setConfig} appData={appData} />
+            ) : appData?.activeType === 'trash' ? (
+              <TrashConfigPanel config={config} setConfig={setConfig} selectedWall={selectedWall} setSelectedWall={setSelectedWall} appData={appData} isGeneratingAR={isGeneratingAR} setIsGeneratingAR={setIsGeneratingAR} />
+            ) : (
+              <ConfigPanel 
+                config={config} 
+                setConfig={setConfig} 
+                selectedWall={selectedWall} 
+                setSelectedWall={setSelectedWall} 
+                appData={appData} 
+                isGeneratingAR={isGeneratingAR} 
+                setIsGeneratingAR={setIsGeneratingAR} 
+                isReadOnly={isReadOnly}
+              />
+            )}
+          </div>
+
+          {isReadOnly && (
+            <div className="pt-4 border-t border-zinc-200 bg-white">
+              <a href={wpAdminUrl || "#"} className="w-full flex justify-center items-center py-4 font-bold bg-zinc-950 text-white hover:bg-zinc-900 transition-colors">
+                ← Wróć do zamówień
+              </a>
             </div>
           )}
         </div>
