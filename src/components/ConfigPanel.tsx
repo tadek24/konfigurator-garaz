@@ -19,7 +19,12 @@ interface ConfigPanelProps {
   setActiveDimId?: Dispatch<SetStateAction<string | null>>;
 }
 
-const WOJEWODZTWA = ["Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubuskie", "Łódzkie", "Małopolskie", "Mazowieckie", "Opolskie", "Podkarpackie", "Podlaskie", "Pomorskie", "Śląskie", "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"];
+const WOJEWODZTWA = [
+  "Dolnośląskie", "Kujawsko-pomorskie", "Lubelskie", "Lubuskie", 
+  "Łódzkie", "Małopolskie", "Mazowieckie", "Opolskie", 
+  "Podkarpackie", "Podlaskie", "Pomorskie", "Śląskie", 
+  "Świętokrzyskie", "Warmińsko-mazurskie", "Wielkopolskie", "Zachodniopomorskie"
+];
 
 function Section({ title, icon, children, defaultOpen = true }: { title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -75,45 +80,56 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   };
 
   const calculatedPrice = useMemo(() => {
-    let total = safeNum(appData?.baseConfig?.p); 
+    let total = 0; 
     let percentMultiplier = 1;
     
-    const baseArea = (safeNum(appData?.baseConfig?.w) / 100) * (safeNum(appData?.baseConfig?.l) / 100);
-    const currentArea = (config.width / 100) * (config.length / 100);
-    const extraArea = Math.max(0, currentArea - baseArea); 
+    let baseM2Price = config.roofType === 'dual-slope' ? safeNum(pricing.sqm_dual) : safeNum(pricing.sqm_single);
     
-    if (extraArea > 0 && safeNum(pricing.sqm_v) > 0) {
-      if (pricing.sqm_t === 'fixed') total += (extraArea * safeNum(pricing.sqm_v));
-      else percentMultiplier += (extraArea * safeNum(pricing.sqm_v) / 100);
-    }
-
-    const doorsCount = config.elements.filter(e => e.type === 'door').length;
-    const windowsCount = config.elements.filter(e => e.type === 'window' || e.type === 'pvc-window').length;
-    const skylightsCount = config.elements.filter(e => e.type === 'skylight').length;
+    const baseH = safeNum(appData?.baseConfig?.h) || 210;
+    const extraHeight = Math.max(0, config.height - baseH);
+    const heightIncrements = Math.floor(extraHeight / 10);
     
-    if (pricing.door_t === 'fixed') total += (doorsCount * safeNum(pricing.door_v));
-    else percentMultiplier += (doorsCount * safeNum(pricing.door_v) / 100);
-
-    if (pricing.window_t === 'fixed') total += (windowsCount * safeNum(pricing.window_v));
-    else percentMultiplier += (windowsCount * safeNum(pricing.window_v) / 100);
-
-    if (pricing.skylight_t === 'fixed') total += (skylightsCount * safeNum(pricing.skylight_v));
-    else percentMultiplier += (skylightsCount * safeNum(pricing.skylight_v) / 100);
+    baseM2Price = baseM2Price * (1 + (heightIncrements * 0.10)); 
+    
+    const area = (config.width / 100) * (config.length / 100);
+    total += area * baseM2Price;
 
     if (config.gutters) {
-      if (pricing.gutter_t === 'fixed') total += safeNum(pricing.gutter_v);
-      if (pricing.gutter_t === 'pct') percentMultiplier += (safeNum(pricing.gutter_v) / 100);
+      let gutterMeters = 0;
+      if (config.roofType === 'dual-slope') {
+        gutterMeters = (config.length / 100) * 2; 
+      } else if (config.roofType === 'slope-back' || config.roofType === 'slope-front') {
+        gutterMeters = (config.width / 100); 
+      } else {
+        gutterMeters = (config.length / 100);
+      }
+      total += gutterMeters * safeNum(pricing.gutter_lm);
     }
 
-    if (config.extraOptions?.includes('cornerFlashings')) {
-      if (pricing.flash_corner_t === 'fixed') total += safeNum(pricing.flash_corner_v);
-      if (pricing.flash_corner_t === 'pct') percentMultiplier += (safeNum(pricing.flash_corner_v) / 100);
-    }
+    config.elements.forEach(el => {
+      if (el.type === 'window' || el.type === 'pvc-window') {
+        if (el.width === 80 && el.height === 60) total += safeNum(pricing.win_80x60);
+        else if (el.width === 40 && el.height === 180) total += safeNum(pricing.win_40x180);
+        else if (el.width === 60 && el.height === 180) total += safeNum(pricing.win_60x180);
+      }
+      if (el.type === 'gate') {
+        if (el.gateType === 'up-and-over') {
+          if (el.width === 200) total += safeNum(pricing.gate_up_2x2);
+          else if (el.width === 300) total += safeNum(pricing.gate_up_3x2);
+          else if (el.width === 400) total += safeNum(pricing.gate_up_4x2);
+          else if (el.width === 500) total += safeNum(pricing.gate_up_5x2);
+        } else if (el.gateType === 'sectional') {
+          if (el.width === 300) total += safeNum(pricing.gate_sec_3x2);
+          else if (el.width === 400) total += safeNum(pricing.gate_sec_4x2);
+          else if (el.width === 500) total += safeNum(pricing.gate_sec_5x2);
+        }
+      }
+      if (el.type === 'door') total += safeNum(pricing.door_v);
+      if (el.type === 'skylight') total += safeNum(pricing.skylight_v);
+    });
 
-    if (config.extraOptions?.includes('roofFlashings')) {
-      if (pricing.flash_roof_t === 'fixed') total += safeNum(pricing.flash_roof_v);
-      if (pricing.flash_roof_t === 'pct') percentMultiplier += (safeNum(pricing.flash_roof_v) / 100);
-    }
+    if (config.extraOptions?.includes('cornerFlashings')) total += safeNum(pricing.flash_corner_v);
+    if (config.extraOptions?.includes('roofFlashings')) total += safeNum(pricing.flash_roof_v);
 
     let customAddonTotal = 0;
     (config.extraOptions || []).forEach(addonId => {
@@ -131,8 +147,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
        if (c && safeNum(c.price) > 0) total += safeNum(c.price);
     });
 
-    const finalPrice = Math.round((total * percentMultiplier) + customAddonTotal);
-    return isNaN(finalPrice) ? 0 : finalPrice;
+    return Math.round((total * percentMultiplier) + customAddonTotal);
   }, [config, pricing, customAddons, appData, dbColors]);
 
   const updateConfig = <K extends keyof GarageConfig>(key: K, value: GarageConfig[K]) => {
@@ -166,9 +181,10 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
   const addElement = (type: GarageElement['type'], wall: WallFace = selectedWall) => {
     if (isReadOnly) return;
-    let width = 100, height = 200;
-    if (type === 'gate') { width = 250; height = 200; }
-    if (type === 'window' || type === 'pvc-window') { width = 100; height = 60; }
+    let width = 80, height = 60; 
+    if (type === 'gate') { width = 200; height = 200; }
+    if (type === 'window' || type === 'pvc-window') { width = 80; height = 60; }
+    if (type === 'door') { width = 100; height = 200; }
     if (type === 'skylight') { width = 100; height = 30; }
 
     const wallWidth = wall === 'front' || wall === 'back' ? config.width : config.length;
@@ -323,7 +339,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
       <Section title="Wymiary Główne" icon={<Maximize size={20} />}>
         <div className="space-y-6">
-          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: 'Wysokość', key: 'height' as const, min: 200, max: 350, step: 5 }].map(dim => (
+          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: `Wysokość (Próg podwyżki +10% powyżej ${appData?.baseConfig?.h || 210}cm)`, key: 'height' as const, min: 200, max: 350, step: 10 }].map(dim => (
             <div key={dim.key}>
               <div className="flex justify-between mb-2 text-sm font-semibold text-zinc-700"><label>{dim.label}</label><span className="bg-white px-2 py-1 rounded border text-[var(--theme)] font-bold">{config[dim.key]} cm</span></div>
               {!isReadOnly && <input type="range" min={dim.min} max={dim.max} step={dim.step} value={config[dim.key]} onChange={(e) => updateConfig(dim.key, Number(e.target.value))} className="w-full" style={{accentColor: 'var(--theme)'}} />}
@@ -374,18 +390,16 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       </Section>
 
       <Section title="Parametry Bram" icon={<BoxSelect size={20} />}>
-        <div className="mb-4">
-          <div className="flex justify-between items-center mb-3">
+        {!isReadOnly && (
+          <div className="mb-4 flex justify-between items-center">
             <span className="text-sm font-medium text-zinc-700">Ilość bram (przód)</span>
-            {!isReadOnly && (
-              <div className="flex gap-2 bg-white rounded-lg border border-zinc-200 p-1">
-                <button onClick={() => { if (gates.length === 2) removeElement(gates[1].id); if (gates.length === 0) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 1 ? 'bg-zinc-100 font-bold text-[var(--theme)]' : ''}`}>1</button>
-                <button onClick={() => { if (gates.length < 2) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 2 ? 'bg-zinc-100 font-bold text-[var(--theme)]' : ''}`}>2</button>
-              </div>
-            )}
-            {isReadOnly && <span className="font-bold text-zinc-900">{gates.length}</span>}
+            <div className="flex gap-2 bg-white rounded-lg border border-zinc-200 p-1">
+              <button onClick={() => { if (gates.length === 2) removeElement(gates[1].id); if (gates.length === 0) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 1 ? 'bg-zinc-100 font-bold text-[var(--theme)]' : ''}`}>1</button>
+              <button onClick={() => { if (gates.length < 2) addElement('gate', 'front'); }} className={`px-3 py-1 rounded-md text-sm ${gates.length === 2 ? 'bg-zinc-100 font-bold text-[var(--theme)]' : ''}`}>2</button>
+            </div>
           </div>
-        </div>
+        )}
+
         {config.roofType === 'slope-front' && <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">⚠️ Dach spadowy w przód — max. wysokość bramy ograniczona.</div>}
 
         {gates.map((gate, i) => (
@@ -394,43 +408,57 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-zinc-800">Brama #{i+1}</h3>
                 <button 
-                  onClick={() => {
-                    setSelectedWall(gate.wall);
-                    setActiveDimId?.(activeDimId === gate.id ? null : gate.id);
-                  }} 
+                  onClick={() => { setSelectedWall(gate.wall); setActiveDimId?.(activeDimId === gate.id ? null : gate.id); }} 
                   className={`p-1.5 rounded-lg transition-colors shadow-sm ${activeDimId === gate.id ? 'bg-[var(--theme)] text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-[var(--theme)]'}`} 
                   title="Pokaż wymiary na modelu 3D"
                 >
                   <Eye size={16} />
                 </button>
               </div>
-              <select disabled={isReadOnly} value={gate.gateType} onChange={(e) => { setSelectedWall('front'); updateElement(gate.id, { gateType: e.target.value as GateType, isOpen: false }); }} className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50 disabled:opacity-80">
-                <option value="up-and-over">Uchylna</option><option value="swing">Dwuskrzydłowa</option><option value="sectional">Segmentowa</option>
+              <select disabled={isReadOnly} value={gate.gateType} onChange={(e) => { 
+                const nType = e.target.value as GateType;
+                let nWidth = gate.width;
+                if (nType === 'sectional' && nWidth < 300) nWidth = 300;
+                setSelectedWall('front'); 
+                updateElement(gate.id, { gateType: nType, width: nWidth, height: 200, isOpen: false }); 
+              }} className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50 disabled:opacity-80">
+                <option value="up-and-over">Uchylna</option><option value="sectional">Segmentowa</option>
               </select>
             </div>
             
             <div className="space-y-4 mb-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-[10px] text-zinc-500 font-bold uppercase">Szer. (cm)</label>
-                    <input type="number" disabled={isReadOnly} value={gate.width} onChange={(e) => updateElement(gate.id, { width: Number(e.target.value) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
-                  </div>
-                  {!isReadOnly && <input type="range" min={100} max={config.width} step={5} value={gate.width} onChange={(e) => updateElement(gate.id, { width: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-[10px] text-zinc-500 font-bold uppercase">Wys. (cm)</label>
-                    <input type="number" disabled={isReadOnly} value={gate.height} max={maxGateHeight} onChange={(e) => updateElement(gate.id, { height: Math.min(Number(e.target.value), maxGateHeight) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
-                  </div>
-                  {!isReadOnly && <input type="range" min={150} max={maxGateHeight} step={5} value={gate.height} onChange={(e) => updateElement(gate.id, { height: Math.min(Number(e.target.value), maxGateHeight) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
-                </div>
+              <div className="mb-2">
+                <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Rozmiar Bramy</label>
+                <select 
+                  disabled={isReadOnly}
+                  value={`${gate.width}x${gate.height}`}
+                  onChange={(e) => { 
+                    const [w, h] = e.target.value.split('x').map(Number); 
+                    updateElement(gate.id, { width: w, height: h }); 
+                  }}
+                  className="w-full border-zinc-300 rounded-lg p-2 text-sm bg-zinc-50 disabled:opacity-80"
+                >
+                  {gate.gateType === 'up-and-over' ? (
+                    <>
+                      <option value="200x200" disabled={config.width < 200}>200 x 200 cm</option>
+                      <option value="300x200" disabled={config.width < 300}>300 x 200 cm</option>
+                      <option value="400x200" disabled={config.width < 400}>400 x 200 cm</option>
+                      <option value="500x200" disabled={config.width < 500}>500 x 200 cm</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="300x200" disabled={config.width < 300}>300 x 200 cm</option>
+                      <option value="400x200" disabled={config.width < 400}>400 x 200 cm</option>
+                      <option value="500x200" disabled={config.width < 500}>500 x 200 cm</option>
+                    </>
+                  )}
+                </select>
               </div>
               
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-[10px] text-zinc-500 font-bold uppercase">Przesunięcie w poziomie (cm)</label>
-                  <input type="number" disabled={isReadOnly} value={gate.x} onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
+                  <input type="number" disabled={isReadOnly} value={gate.x} onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
                 </div>
                 {!isReadOnly && <input type="range" min={-(config.width / 2) + gate.width/2} max={(config.width / 2) - gate.width/2} step={5} value={gate.x} onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
               </div>
@@ -445,7 +473,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                 }`}
               >
-                {gate.isOpen ? '🔓 Zamknij bramę' : '🔑 Otwórz bramę (pogląd)'}
+                {gate.isOpen ? '🔓 Zamknij bramę' : '🔑 Otwórz bramę'}
               </button>
             </div>
           </div>
@@ -486,12 +514,9 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                   )}
                   
                   <div className="flex items-center gap-2 mb-4">
-                    <h3 className="font-semibold text-zinc-800 capitalize">{el.type === 'door' ? 'Drzwi' : el.type === 'skylight' ? 'Świetlik (pleksa)' : 'Okno'} #{idx + 1}</h3>
+                    <h3 className="font-semibold text-zinc-800 capitalize">{el.type === 'door' ? 'Drzwi' : el.type === 'skylight' ? 'Świetlik' : 'Okno'} #{idx + 1}</h3>
                     <button 
-                      onClick={() => {
-                        setSelectedWall(el.wall);
-                        setActiveDimId?.(activeDimId === el.id ? null : el.id);
-                      }} 
+                      onClick={() => { setSelectedWall(el.wall); setActiveDimId?.(activeDimId === el.id ? null : el.id); }} 
                       className={`p-1.5 rounded-lg transition-colors shadow-sm ${activeDimId === el.id ? 'bg-[var(--theme)] text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-[var(--theme)]'}`} 
                       title="Pokaż wymiary na modelu 3D"
                     >
@@ -500,22 +525,41 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                   </div>
 
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4 mb-2">
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <label className="text-[10px] text-zinc-500 font-bold uppercase truncate pr-1">Szer. (cm)</label>
-                          <input type="number" disabled={isReadOnly} value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
-                        </div>
-                        {!isReadOnly && <input type="range" min={20} max={wallW} step={5} value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
+                    {(el.type === 'window' || el.type === 'pvc-window') ? (
+                      <div className="mb-2">
+                        <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Wymiar Okna</label>
+                        <select 
+                          disabled={isReadOnly}
+                          value={`${el.width}x${el.height}`}
+                          onChange={(e) => { 
+                            const [w, h] = e.target.value.split('x').map(Number); 
+                            updateElement(el.id, { width: w, height: h }); 
+                          }}
+                          className="w-full border-zinc-300 rounded-lg p-2 text-sm bg-zinc-50 disabled:opacity-80"
+                        >
+                          <option value="80x60">80 x 60 cm</option>
+                          <option value="40x180">40 x 180 cm</option>
+                          <option value="60x180">60 x 180 cm</option>
+                        </select>
                       </div>
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <label className="text-[10px] text-zinc-500 font-bold uppercase truncate pr-1">Wys. (cm)</label>
-                          <input type="number" disabled={isReadOnly} value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4 mb-2">
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[10px] text-zinc-500 font-bold uppercase truncate pr-1">Szer. (cm)</label>
+                            <input type="number" disabled={isReadOnly} value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
+                          </div>
+                          {!isReadOnly && <input type="range" min={20} max={wallW} step={5} value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
                         </div>
-                        {!isReadOnly && <input type="range" min={20} max={config.height} step={5} value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[10px] text-zinc-500 font-bold uppercase truncate pr-1">Wys. (cm)</label>
+                            <input type="number" disabled={isReadOnly} value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
+                          </div>
+                          {!isReadOnly && <input type="range" min={20} max={config.height} step={5} value={el.height} onChange={(e) => updateElement(el.id, { height: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4 mb-2">
                       <div>
@@ -559,7 +603,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <span className="text-sm font-semibold text-zinc-700">Rynny i rury spustowe</span>
             </div>
             <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              {pricing.gutter_t === 'pct' ? `+${safeNum(pricing.gutter_v)}%` : `+${safeNum(pricing.gutter_v)} zł`}
+              wg mb
             </span>
           </label>
 
