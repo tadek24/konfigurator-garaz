@@ -80,84 +80,99 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   };
 
   const calculatedPrice = useMemo(() => {
-    let total = 0; 
-    let percentMultiplier = 1;
+    let totalBase = 0; 
+    let percentBaseMultiplier = 1;
+    let totalFinal = 0;
+    let percentFinalMultiplier = 1;
+
+    let baseM2Price = config.roofType === 'dual-slope' ? safeNum(pricing.sqm_dual_v) : safeNum(pricing.sqm_single_v);
     
-    // 1. Zależność od typu dachu
-    let baseM2Price = config.roofType === 'dual-slope' ? safeNum(pricing.sqm_dual) : safeNum(pricing.sqm_single);
-    
-    // 2. Skok wysokości (+10% z m2)
     const baseH = safeNum(appData?.baseConfig?.h) || 210;
     const extraHeight = Math.max(0, config.height - baseH);
     const heightIncrements = Math.floor(extraHeight / 10);
     baseM2Price = baseM2Price * (1 + (heightIncrements * 0.10)); 
     
     const area = (config.width / 100) * (config.length / 100);
-    total += area * baseM2Price;
+    totalBase += area * baseM2Price;
 
-    // 3. Rynny za mb obrysu dachu
     if (config.gutters) {
       let gutterMeters = 0;
-      if (config.roofType === 'dual-slope') {
-        gutterMeters = (config.length / 100) * 2; 
-      } else if (config.roofType === 'slope-back' || config.roofType === 'slope-front') {
-        gutterMeters = (config.width / 100); 
-      } else {
-        gutterMeters = (config.length / 100);
-      }
-      total += gutterMeters * safeNum(pricing.gutter_lm);
-    }
-
-    // 4. Blachodachówka za m2
-    if (config.extraOptions?.includes('roofTile')) {
-       total += area * safeNum(pricing.roof_tile_v);
+      if (config.roofType === 'dual-slope') gutterMeters = (config.length / 100) * 2; 
+      else if (config.roofType === 'slope-back' || config.roofType === 'slope-front') gutterMeters = (config.width / 100); 
+      else gutterMeters = (config.length / 100);
+      totalBase += gutterMeters * safeNum(pricing.gutter_v);
     }
 
     config.elements.forEach(el => {
-      // Świetlik za mb
-      if (el.type === 'skylight') total += (el.width / 100) * safeNum(pricing.skylight_v);
-      
-      // Okna i Bramy
+      if (el.type === 'skylight') {
+         totalBase += (el.width / 100) * safeNum(pricing.skylight_v);
+      }
       if (el.type === 'window' || el.type === 'pvc-window') {
-        if (el.width === 80 && el.height === 60) total += safeNum(pricing.win_80x60);
-        else if (el.width === 40 && el.height === 180) total += safeNum(pricing.win_40x180);
-        else if (el.width === 60 && el.height === 180) total += safeNum(pricing.win_60x180);
+        if (el.width === 80 && el.height === 60) totalBase += safeNum(pricing.win_80x60);
+        else if (el.width === 180 && el.height === 40) totalBase += safeNum(pricing.win_40x180);
+        else if (el.width === 180 && el.height === 60) totalBase += safeNum(pricing.win_60x180);
       }
       if (el.type === 'gate') {
         if (el.gateType === 'up-and-over') {
-          if (el.width === 200) total += safeNum(pricing.gate_up_2x2);
-          else if (el.width === 300) total += safeNum(pricing.gate_up_3x2);
-          else if (el.width === 400) total += safeNum(pricing.gate_up_4x2);
-          else if (el.width === 500) total += safeNum(pricing.gate_up_5x2);
+          if (el.width === 200) totalBase += safeNum(pricing.gate_up_2x2);
+          else if (el.width === 300) totalBase += safeNum(pricing.gate_up_3x2);
+          else if (el.width === 400) totalBase += safeNum(pricing.gate_up_4x2);
+          else if (el.width === 500) totalBase += safeNum(pricing.gate_up_5x2);
         } else if (el.gateType === 'sectional') {
-          if (el.width === 300) total += safeNum(pricing.gate_sec_3x2);
-          else if (el.width === 400) total += safeNum(pricing.gate_sec_4x2);
-          else if (el.width === 500) total += safeNum(pricing.gate_sec_5x2);
+          if (el.width === 300) totalBase += safeNum(pricing.gate_sec_3x2);
+          else if (el.width === 400) totalBase += safeNum(pricing.gate_sec_4x2);
+          else if (el.width === 500) totalBase += safeNum(pricing.gate_sec_5x2);
         }
       }
-      if (el.type === 'door') total += safeNum(pricing.door_v);
+      if (el.type === 'door') {
+        if (pricing.door_t === 'fixed') totalBase += safeNum(pricing.door_v);
+        else if (pricing.door_t === 'pct_base') percentBaseMultiplier += (safeNum(pricing.door_v)/100);
+        else percentFinalMultiplier += (safeNum(pricing.door_v)/100);
+      }
     });
 
-    if (config.extraOptions?.includes('cornerFlashings')) total += safeNum(pricing.flash_corner_v);
-    if (config.extraOptions?.includes('roofFlashings')) total += safeNum(pricing.flash_roof_v);
+    if (config.extraOptions?.includes('roofTile')) {
+       totalBase += area * safeNum(pricing.roof_tile_v);
+    }
+
+    if (config.extraOptions?.includes('cornerFlashings')) {
+        if (pricing.flash_corner_t === 'fixed') totalBase += safeNum(pricing.flash_corner_v);
+        else if (pricing.flash_corner_t === 'pct_base') percentBaseMultiplier += (safeNum(pricing.flash_corner_v)/100);
+        else percentFinalMultiplier += (safeNum(pricing.flash_corner_v)/100);
+    }
+    if (config.extraOptions?.includes('roofFlashings')) {
+        if (pricing.flash_roof_t === 'fixed') totalBase += safeNum(pricing.flash_roof_v);
+        else if (pricing.flash_roof_t === 'pct_base') percentBaseMultiplier += (safeNum(pricing.flash_roof_v)/100);
+        else percentFinalMultiplier += (safeNum(pricing.flash_roof_v)/100);
+    }
+
+    const activeColors = [config.wallColor, config.roofColor, config.gateColor, config.cornerFlashingColor, config.roofFlashingColor, config.gutterColor];
+    const uniqueColors = Array.from(new Set(activeColors));
+    let hasWoodColor = false;
+
+    uniqueColors.forEach(cId => {
+       const c = dbColors.find((col: any) => col.id === cId);
+       if (c && safeNum(c.price) > 0) totalBase += safeNum(c.price);
+       if (c && c.type && c.type.toLowerCase().includes('drewn')) hasWoodColor = true;
+    });
+
+    if (hasWoodColor) {
+        if (pricing.wood_t === 'fixed') totalBase += safeNum(pricing.wood_v);
+        else if (pricing.wood_t === 'pct_base') percentBaseMultiplier += (safeNum(pricing.wood_v)/100);
+        else percentFinalMultiplier += (safeNum(pricing.wood_v)/100);
+    }
 
     let customAddonTotal = 0;
     (config.extraOptions || []).forEach(addonId => {
       const addon = customAddons.find((a: any) => a.id === addonId);
       if (addon) {
         if (addon.type === 'fixed') customAddonTotal += safeNum(addon.price);
-        if (addon.type === 'pct') percentMultiplier += (safeNum(addon.price) / 100);
+        if (addon.type === 'pct') percentFinalMultiplier += (safeNum(addon.price) / 100);
       }
     });
 
-    const activeColors = [config.wallColor, config.roofColor, config.gateColor, config.cornerFlashingColor, config.roofFlashingColor, config.gutterColor];
-    const uniquePremiumColors = Array.from(new Set(activeColors));
-    uniquePremiumColors.forEach(cId => {
-       const c = dbColors.find((col: any) => col.id === cId);
-       if (c && safeNum(c.price) > 0) total += safeNum(c.price);
-    });
-
-    return Math.round((total * percentMultiplier) + customAddonTotal);
+    totalBase = totalBase * percentBaseMultiplier;
+    return Math.round((totalBase + totalFinal) * percentFinalMultiplier + customAddonTotal);
   }, [config, pricing, customAddons, appData, dbColors]);
 
   const updateConfig = <K extends keyof GarageConfig>(key: K, value: GarageConfig[K]) => {
@@ -193,7 +208,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     if (isReadOnly) return;
     let width = 80, height = 60; 
     if (type === 'gate') { width = 200; height = 200; }
-    if (type === 'window' || type === 'pvc-window') { width = 80; height = 60; }
     if (type === 'door') { width = 100; height = 200; }
     if (type === 'skylight') { width = 100; height = 30; }
 
@@ -349,7 +363,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
       <Section title="Wymiary Główne" icon={<Maximize size={20} />}>
         <div className="space-y-6">
-          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: `Wysokość (Dopłata +10% powyżej ${appData?.baseConfig?.h || 210}cm)`, key: 'height' as const, min: 200, max: 350, step: 10 }].map(dim => (
+          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: `Wysokość (Dopłata +10% za każde 10cm powyżej ${appData?.baseConfig?.h || 210}cm)`, key: 'height' as const, min: 200, max: 350, step: 10 }].map(dim => (
             <div key={dim.key}>
               <div className="flex justify-between mb-2 text-sm font-semibold text-zinc-700"><label>{dim.label}</label><span className="bg-white px-2 py-1 rounded border text-[var(--theme)] font-bold">{config[dim.key]} cm</span></div>
               {!isReadOnly && <input type="range" min={dim.min} max={dim.max} step={dim.step} value={config[dim.key]} onChange={(e) => updateConfig(dim.key, Number(e.target.value))} className="w-full" style={{accentColor: 'var(--theme)'}} />}
@@ -438,7 +452,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             
             <div className="space-y-4 mb-3">
               <div className="mb-2">
-                <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Rozmiar Bramy (Wysokość x Szerokość)</label>
+                <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Wymiar Bramy (Wysokość x Szerokość)</label>
                 <select 
                   disabled={isReadOnly}
                   value={`${gate.width}x${gate.height}`}
@@ -450,16 +464,16 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 >
                   {gate.gateType === 'up-and-over' ? (
                     <>
-                      <option value="200x200" disabled={config.width < 200}>Wys: 200 x Szer: 200 cm</option>
-                      <option value="300x200" disabled={config.width < 300}>Wys: 200 x Szer: 300 cm</option>
-                      <option value="400x200" disabled={config.width < 400}>Wys: 200 x Szer: 400 cm</option>
-                      <option value="500x200" disabled={config.width < 500}>Wys: 200 x Szer: 500 cm</option>
+                      <option value="200x200" disabled={config.width < 200 + 10}>Wys: 200 x Szer: 200 cm</option>
+                      <option value="300x200" disabled={config.width < 300 + 10}>Wys: 200 x Szer: 300 cm</option>
+                      <option value="400x200" disabled={config.width < 400 + 10}>Wys: 200 x Szer: 400 cm</option>
+                      <option value="500x200" disabled={config.width < 500 + 10}>Wys: 200 x Szer: 500 cm</option>
                     </>
                   ) : (
                     <>
-                      <option value="300x200" disabled={config.width < 300}>Wys: 200 x Szer: 300 cm</option>
-                      <option value="400x200" disabled={config.width < 400}>Wys: 200 x Szer: 400 cm</option>
-                      <option value="500x200" disabled={config.width < 500}>Wys: 200 x Szer: 500 cm</option>
+                      <option value="300x200" disabled={config.width < 300 + 10}>Wys: 200 x Szer: 300 cm</option>
+                      <option value="400x200" disabled={config.width < 400 + 10}>Wys: 200 x Szer: 400 cm</option>
+                      <option value="500x200" disabled={config.width < 500 + 10}>Wys: 200 x Szer: 500 cm</option>
                     </>
                   )}
                 </select>
@@ -547,9 +561,9 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                           }}
                           className="w-full border-zinc-300 rounded-lg p-2 text-sm bg-zinc-50 disabled:opacity-80"
                         >
-                          <option value="80x60">Wys: 60 x Szer: 80 cm</option>
-                          <option value="40x180">Wys: 180 x Szer: 40 cm</option>
-                          <option value="60x180">Wys: 180 x Szer: 60 cm</option>
+                          <option value="80x60" disabled={wallW < 80 || config.height < 60 + 20}>Wys: 60 x Szer: 80 cm</option>
+                          <option value="180x40" disabled={wallW < 180 || config.height < 40 + 20}>Wys: 40 x Szer: 180 cm</option>
+                          <option value="180x60" disabled={wallW < 180 || config.height < 60 + 20}>Wys: 60 x Szer: 180 cm</option>
                         </select>
                       </div>
                     ) : el.type === 'skylight' ? (
@@ -587,7 +601,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                       </div>
                       <div>
                         <div className="flex justify-between items-center mb-1">
-                          <label className="text-[10px] text-zinc-500 font-bold uppercase truncate pr-1">Wys. od podłoża</label>
+                          <label className="text-[10px] text-zinc-500 font-bold uppercase truncate pr-1">Wys. od podłoża (cm)</label>
                           <input type="number" disabled={isReadOnly} value={el.y} onChange={(e) => updateElement(el.id, { y: Number(e.target.value) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
                         </div>
                         {!isReadOnly && <input type="range" min={0} max={maxY} step={5} value={el.y} onChange={(e) => updateElement(el.id, { y: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
@@ -618,8 +632,9 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <input type="checkbox" disabled={isReadOnly} checked={config.extraOptions?.includes('roofTile')} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), 'roofTile'] : (config.extraOptions || []).filter(x => x !== 'roofTile'); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)] disabled:opacity-50" />
               <span className="text-sm font-semibold text-zinc-700">Dach: Blachodachówka</span>
             </div>
-            <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              za m²
+            {/* JEDNOSTKA UKRYTA - OBLICZA DOKŁADNĄ KWOTĘ W LOKALNYM ZAKRESIE */}
+            <span className="text-xs font-bold text-[var(--theme)] bg-[var(--theme)]/10 px-2 py-1 rounded">
+              +{Math.round((config.width / 100) * (config.length / 100) * safeNum(pricing.roof_tile_v))} zł
             </span>
           </label>
 
@@ -628,8 +643,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <input type="checkbox" disabled={isReadOnly} checked={config.gutters} onChange={(e) => updateConfig('gutters', e.target.checked)} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)] disabled:opacity-50" />
               <span className="text-sm font-semibold text-zinc-700">Rynny i rury spustowe</span>
             </div>
-            <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              za mb
+            <span className="text-xs font-bold text-[var(--theme)] bg-[var(--theme)]/10 px-2 py-1 rounded">
+              +{Math.round((config.roofType === 'dual-slope' ? (config.length / 100) * 2 : (config.roofType === 'slope-back' || config.roofType === 'slope-front' ? (config.width / 100) : (config.length / 100))) * safeNum(pricing.gutter_v))} zł
             </span>
           </label>
 

@@ -136,11 +136,26 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const [roofTileTex, setRoofTileTex] = useState<THREE.Texture | null>(null);
 
   useEffect(() => {
-    const rTex = trapezTex.clone();
-    rTex.wrapS = rTex.wrapT = THREE.RepeatWrapping;
-    rTex.repeat.set(10, 10); 
-    rTex.needsUpdate = true;
-    setRoofTileTex(rTex);
+    // Sprytny system ładowania blachodachówki - jak nie znajdzie pliku, to zasymuluje ją z trapezu!
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      '/textures/blachodachowka.jpg', 
+      (tex) => {
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(4, 4); 
+        tex.colorSpace = THREE.SRGBColorSpace;
+        setRoofTileTex(tex);
+      },
+      undefined,
+      () => {
+        // Fallback: Rozciąga trapez imitując grubsze fale
+        const rTex = trapezTex.clone();
+        rTex.wrapS = rTex.wrapT = THREE.RepeatWrapping;
+        rTex.repeat.set(15, 3); 
+        rTex.needsUpdate = true;
+        setRoofTileTex(rTex);
+      }
+    );
   }, [trapezTex]);
 
   useEffect(() => {
