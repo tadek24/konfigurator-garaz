@@ -83,17 +83,19 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     let total = 0; 
     let percentMultiplier = 1;
     
+    // 1. Zależność od typu dachu
     let baseM2Price = config.roofType === 'dual-slope' ? safeNum(pricing.sqm_dual) : safeNum(pricing.sqm_single);
     
+    // 2. Skok wysokości (+10% z m2)
     const baseH = safeNum(appData?.baseConfig?.h) || 210;
     const extraHeight = Math.max(0, config.height - baseH);
     const heightIncrements = Math.floor(extraHeight / 10);
-    
     baseM2Price = baseM2Price * (1 + (heightIncrements * 0.10)); 
     
     const area = (config.width / 100) * (config.length / 100);
     total += area * baseM2Price;
 
+    // 3. Rynny za mb obrysu dachu
     if (config.gutters) {
       let gutterMeters = 0;
       if (config.roofType === 'dual-slope') {
@@ -106,7 +108,16 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       total += gutterMeters * safeNum(pricing.gutter_lm);
     }
 
+    // 4. Blachodachówka za m2
+    if (config.extraOptions?.includes('roofTile')) {
+       total += area * safeNum(pricing.roof_tile_v);
+    }
+
     config.elements.forEach(el => {
+      // Świetlik za mb
+      if (el.type === 'skylight') total += (el.width / 100) * safeNum(pricing.skylight_v);
+      
+      // Okna i Bramy
       if (el.type === 'window' || el.type === 'pvc-window') {
         if (el.width === 80 && el.height === 60) total += safeNum(pricing.win_80x60);
         else if (el.width === 40 && el.height === 180) total += safeNum(pricing.win_40x180);
@@ -125,7 +136,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         }
       }
       if (el.type === 'door') total += safeNum(pricing.door_v);
-      if (el.type === 'skylight') total += safeNum(pricing.skylight_v);
     });
 
     if (config.extraOptions?.includes('cornerFlashings')) total += safeNum(pricing.flash_corner_v);
@@ -339,7 +349,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
       <Section title="Wymiary Główne" icon={<Maximize size={20} />}>
         <div className="space-y-6">
-          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: `Wysokość (Próg podwyżki +10% powyżej ${appData?.baseConfig?.h || 210}cm)`, key: 'height' as const, min: 200, max: 350, step: 10 }].map(dim => (
+          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: `Wysokość (Dopłata +10% powyżej ${appData?.baseConfig?.h || 210}cm)`, key: 'height' as const, min: 200, max: 350, step: 10 }].map(dim => (
             <div key={dim.key}>
               <div className="flex justify-between mb-2 text-sm font-semibold text-zinc-700"><label>{dim.label}</label><span className="bg-white px-2 py-1 rounded border text-[var(--theme)] font-bold">{config[dim.key]} cm</span></div>
               {!isReadOnly && <input type="range" min={dim.min} max={dim.max} step={dim.step} value={config[dim.key]} onChange={(e) => updateConfig(dim.key, Number(e.target.value))} className="w-full" style={{accentColor: 'var(--theme)'}} />}
@@ -428,7 +438,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
             
             <div className="space-y-4 mb-3">
               <div className="mb-2">
-                <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Rozmiar Bramy</label>
+                <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Rozmiar Bramy (Wysokość x Szerokość)</label>
                 <select 
                   disabled={isReadOnly}
                   value={`${gate.width}x${gate.height}`}
@@ -440,16 +450,16 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 >
                   {gate.gateType === 'up-and-over' ? (
                     <>
-                      <option value="200x200" disabled={config.width < 200}>200 x 200 cm</option>
-                      <option value="300x200" disabled={config.width < 300}>300 x 200 cm</option>
-                      <option value="400x200" disabled={config.width < 400}>400 x 200 cm</option>
-                      <option value="500x200" disabled={config.width < 500}>500 x 200 cm</option>
+                      <option value="200x200" disabled={config.width < 200}>Wys: 200 x Szer: 200 cm</option>
+                      <option value="300x200" disabled={config.width < 300}>Wys: 200 x Szer: 300 cm</option>
+                      <option value="400x200" disabled={config.width < 400}>Wys: 200 x Szer: 400 cm</option>
+                      <option value="500x200" disabled={config.width < 500}>Wys: 200 x Szer: 500 cm</option>
                     </>
                   ) : (
                     <>
-                      <option value="300x200" disabled={config.width < 300}>300 x 200 cm</option>
-                      <option value="400x200" disabled={config.width < 400}>400 x 200 cm</option>
-                      <option value="500x200" disabled={config.width < 500}>500 x 200 cm</option>
+                      <option value="300x200" disabled={config.width < 300}>Wys: 200 x Szer: 300 cm</option>
+                      <option value="400x200" disabled={config.width < 400}>Wys: 200 x Szer: 400 cm</option>
+                      <option value="500x200" disabled={config.width < 500}>Wys: 200 x Szer: 500 cm</option>
                     </>
                   )}
                 </select>
@@ -495,7 +505,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
             <button onClick={() => addElement('door')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Drzwi</button>
             <button onClick={() => addElement('window')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Okno</button>
-            <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik (Lufcik)</button>
+            <button onClick={() => addElement('skylight')} className="flex-none bg-white border border-zinc-300 text-zinc-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 hover:border-zinc-400"><Plus size={16} /> Świetlik (mb)</button>
           </div>
         )}
         <div className="space-y-4">
@@ -514,7 +524,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                   )}
                   
                   <div className="flex items-center gap-2 mb-4">
-                    <h3 className="font-semibold text-zinc-800 capitalize">{el.type === 'door' ? 'Drzwi' : el.type === 'skylight' ? 'Świetlik' : 'Okno'} #{idx + 1}</h3>
+                    <h3 className="font-semibold text-zinc-800 capitalize">{el.type === 'door' ? 'Drzwi' : el.type === 'skylight' ? 'Świetlik (mb)' : 'Okno'} #{idx + 1}</h3>
                     <button 
                       onClick={() => { setSelectedWall(el.wall); setActiveDimId?.(activeDimId === el.id ? null : el.id); }} 
                       className={`p-1.5 rounded-lg transition-colors shadow-sm ${activeDimId === el.id ? 'bg-[var(--theme)] text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-[var(--theme)]'}`} 
@@ -527,7 +537,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                   <div className="space-y-4">
                     {(el.type === 'window' || el.type === 'pvc-window') ? (
                       <div className="mb-2">
-                        <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Wymiar Okna</label>
+                        <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Wymiar Okna (Wysokość x Szerokość)</label>
                         <select 
                           disabled={isReadOnly}
                           value={`${el.width}x${el.height}`}
@@ -537,11 +547,17 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                           }}
                           className="w-full border-zinc-300 rounded-lg p-2 text-sm bg-zinc-50 disabled:opacity-80"
                         >
-                          <option value="80x60">80 x 60 cm</option>
-                          <option value="40x180">40 x 180 cm</option>
-                          <option value="60x180">60 x 180 cm</option>
+                          <option value="80x60">Wys: 60 x Szer: 80 cm</option>
+                          <option value="40x180">Wys: 180 x Szer: 40 cm</option>
+                          <option value="60x180">Wys: 180 x Szer: 60 cm</option>
                         </select>
                       </div>
+                    ) : el.type === 'skylight' ? (
+                       <div className="mb-2">
+                          <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Długość Świetlika (w cm)</label>
+                          <input type="number" disabled={isReadOnly} value={el.width} onChange={(e) => updateElement(el.id, { width: Number(e.target.value) })} className="w-full border border-zinc-300 p-2 rounded text-sm bg-zinc-50 outline-none disabled:opacity-80" />
+                          <p className="text-[10px] text-zinc-500 mt-1">Szerokość pobierana w metrach bieżących do cennika.</p>
+                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-4 mb-2">
                         <div>
@@ -571,7 +587,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                       </div>
                       <div>
                         <div className="flex justify-between items-center mb-1">
-                          <label className="text-[10px] text-zinc-500 font-bold uppercase truncate pr-1">Wys. od podłoża (cm)</label>
+                          <label className="text-[10px] text-zinc-500 font-bold uppercase truncate pr-1">Wys. od podłoża</label>
                           <input type="number" disabled={isReadOnly} value={el.y} onChange={(e) => updateElement(el.id, { y: Number(e.target.value) })} className="w-16 border border-zinc-300 p-1 rounded text-xs bg-zinc-50 focus:bg-white focus:border-[var(--theme)] outline-none text-right disabled:opacity-80 disabled:cursor-not-allowed" />
                         </div>
                         {!isReadOnly && <input type="range" min={0} max={maxY} step={5} value={el.y} onChange={(e) => updateElement(el.id, { y: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
@@ -599,11 +615,21 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         <div className="space-y-3">
           <label className={`flex items-center justify-between p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm ${isReadOnly ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}>
             <div className="flex items-center gap-3">
+              <input type="checkbox" disabled={isReadOnly} checked={config.extraOptions?.includes('roofTile')} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), 'roofTile'] : (config.extraOptions || []).filter(x => x !== 'roofTile'); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)] disabled:opacity-50" />
+              <span className="text-sm font-semibold text-zinc-700">Dach: Blachodachówka</span>
+            </div>
+            <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
+              za m²
+            </span>
+          </label>
+
+          <label className={`flex items-center justify-between p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm ${isReadOnly ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}>
+            <div className="flex items-center gap-3">
               <input type="checkbox" disabled={isReadOnly} checked={config.gutters} onChange={(e) => updateConfig('gutters', e.target.checked)} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)] disabled:opacity-50" />
               <span className="text-sm font-semibold text-zinc-700">Rynny i rury spustowe</span>
             </div>
             <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">
-              wg mb
+              za mb
             </span>
           </label>
 

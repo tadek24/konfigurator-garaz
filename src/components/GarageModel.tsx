@@ -27,7 +27,6 @@ function resolveColor(colorId: string | undefined, colors: any[] = []): { hex: s
 const PANEL_COUNT = 5;
 
 function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, woodColorHoriz, woodNormalHoriz, config, colors, loadedTextures }: any) {
-  // ... (kod bramy segmentowej pozostaje bez zmian)
   const groupRef = useRef<THREE.Group>(null);
   const progress = useRef(el.isOpen ? 1 : 0);
   const elW = (el.width || 0) * 0.01; const elH = (el.height || 0) * 0.01; const thick = 0.05; const panelH = elH / PANEL_COUNT;
@@ -72,7 +71,6 @@ function SectionalGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, w
 }
 
 function AnimatedGate({ el, woodColor, woodNormal, trapezTex, trapezTexHoriz, woodColorHoriz, woodNormalHoriz, config, colors, loadedTextures }: any) {
-   // ... (kod animowanej bramy pozostaje bez zmian)
   const ref = useRef<THREE.Group>(null);
   const elW = (el.width || 0) * 0.01; const elH = (el.height || 0) * 0.01; const thick = 0.05;
   const animState = useRef({ progress: el.isOpen ? 1 : 0 });
@@ -123,7 +121,6 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const t = 0.05;     
   const slopeH = 0.4; 
 
-  // GEOMETRIA WIATY
   const hasCarport = config.hasCarport || false;
   const cw = hasCarport ? (config.carportWidth || 300) * 0.01 : 0;
   const cSide = config.carportSide || 'right';
@@ -131,11 +128,20 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const minX = cSide === 'left' ? -w/2 - cw : -w/2;
   const maxX = cSide === 'right' ? w/2 + cw : w/2;
   const totalW = maxX - minX;
-  const centerX = (minX + maxX) / 2; // Służy do wyśrodkowania dachu
+  const centerX = (minX + maxX) / 2; 
 
   const [trapezTex] = useTexture(['/textures/trapez.jpg']);
   const [woodNormal] = useTexture(['/textures/drewno-normal.jpg']);
   const [loadedTextures, setLoadedTextures] = useState<Record<string, THREE.Texture>>({});
+  const [roofTileTex, setRoofTileTex] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    const rTex = trapezTex.clone();
+    rTex.wrapS = rTex.wrapT = THREE.RepeatWrapping;
+    rTex.repeat.set(10, 10); 
+    rTex.needsUpdate = true;
+    setRoofTileTex(rTex);
+  }, [trapezTex]);
 
   useEffect(() => {
     const urlsToLoad = Array.from(new Set([
@@ -174,6 +180,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const showGutters = config.gutters || (config.extraOptions || []).some(id => id.toLowerCase().includes('rynn'));
   const showCornerFlashings = (config.extraOptions || []).includes('cornerFlashings');
   const showRoofFlashings = (config.extraOptions || []).includes('roofFlashings');
+  const isRoofTile = (config.extraOptions || []).includes('roofTile');
 
   const { trapezTexHoriz, woodNormalHoriz } = useMemo(() => {
     trapezTex.wrapS = trapezTex.wrapT = THREE.RepeatWrapping;
@@ -192,12 +199,11 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
   const isLeft = rt.includes('left') || rt.includes('lewo');
   const isRight = rt.includes('right') || rt.includes('prawo');
 
-  // Funkcja obliczająca wysokość dachu w dowolnym punkcie (X, Z) - Magia symetrii!
   const getH = (x: number, z: number) => {
     if (isDual) return h + slopeH * (1 - Math.abs(x - centerX) / (totalW / 2));
     if (isFront) return h + slopeH * (0.5 - z/l);
     if (isBack) return h + slopeH * (0.5 + z/l);
-    if (isLeft) return h + slopeH * ((x - minX) / totalW); // spada na lewo, prawa najwyżej
+    if (isLeft) return h + slopeH * ((x - minX) / totalW); 
     if (isRight) return h + slopeH * (1 - (x - minX) / totalW);
     return h;
   };
@@ -297,12 +303,13 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     const baseRoofWood = roofTexUrl && loadedTextures[roofTexUrl] ? loadedTextures[roofTexUrl] : trapezTex;
     const baseFasciaWood = fasciaTexUrl && loadedTextures[fasciaTexUrl] ? loadedTextures[fasciaTexUrl] : undefined;
 
+    const roofTexToUse = isRoofTile ? (roofTileTex || trapezTex) : (isRoofWood ? baseRoofWood : trapezTex);
+
     const renderFasciaMat = (attachName: string) => <meshStandardMaterial attach={attachName} color={isFasciaWood ? '#ffffff' : fasciaHex} map={isFasciaWood && baseFasciaWood ? baseFasciaWood : undefined} roughness={0.8} metalness={0.2} visible={!!showRoofFlashings} side={THREE.DoubleSide} />;
-    const renderMainRoofMat = (attachName: string) => <meshStandardMaterial attach={attachName} color={isRoofWood ? '#ffffff' : roofHex} map={isRoofWood ? baseRoofWood : trapezTex} normalMap={isRoofWood ? woodNormal : undefined} normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined} roughness={isRoofWood ? 0.7 : 0.4} metalness={isRoofWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />;
+    const renderMainRoofMat = (attachName: string) => <meshStandardMaterial attach={attachName} color={isRoofWood ? '#ffffff' : roofHex} map={roofTexToUse} normalMap={isRoofWood ? woodNormal : undefined} normalScale={isRoofWood ? new THREE.Vector2(1.5, 1.5) : undefined} roughness={isRoofWood ? 0.7 : 0.4} metalness={isRoofWood ? 0.0 : 0.6} envMapIntensity={1.5} side={THREE.DoubleSide} />;
 
     const gutterR = 0.035; const pipeR = 0.025;
     
-    // TUTAJ ZNAJDOWAŁ SIĘ BŁĄD. DODANO `posPipe[1]` DO OBLICZEŃ POZYCJI Y DLA RURY SPUSTOWEJ.
     const renderGutterPipe = (length: number, rot: [number, number, number], posGutter: [number, number, number], posPipe: [number, number, number], pipeHeight: number) => (
       <group>
         <mesh position={posGutter} rotation={rot} castShadow><cylinderGeometry args={[gutterR, gutterR, length, 16]} /><meshStandardMaterial {...gutterMatProps} /></mesh>
@@ -403,10 +410,10 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
     const insertMat = new THREE.MeshStandardMaterial({ color: insertRes.isWood ? '#ffffff' : insertRes.hex, map: insertRes.isWood ? insertTex : undefined, normalMap: insertRes.isWood ? woodNormalHoriz : undefined, roughness: insertRes.isWood ? 0.7 : 0.4, metalness: insertRes.isWood ? 0.0 : 0.6 });
 
     const pillars = []; const pSize = 0.08;
-    pillars.push([cSide === 'right' ? maxX - pSize/2 : minX + pSize/2, h/2, l/2 - pSize/2]); // Front-Outer
-    pillars.push([cSide === 'right' ? maxX - pSize/2 : minX + pSize/2, h/2, -l/2 + pSize/2]); // Back-Outer
-    pillars.push([cSide === 'right' ? w/2 + pSize/2 : -w/2 - pSize/2, h/2, l/2 - pSize/2]); // Front-Inner
-    pillars.push([cSide === 'right' ? w/2 + pSize/2 : -w/2 - pSize/2, h/2, -l/2 + pSize/2]); // Back-Inner
+    pillars.push([cSide === 'right' ? maxX - pSize/2 : minX + pSize/2, h/2, l/2 - pSize/2]); 
+    pillars.push([cSide === 'right' ? maxX - pSize/2 : minX + pSize/2, h/2, -l/2 + pSize/2]); 
+    pillars.push([cSide === 'right' ? w/2 + pSize/2 : -w/2 - pSize/2, h/2, l/2 - pSize/2]); 
+    pillars.push([cSide === 'right' ? w/2 + pSize/2 : -w/2 - pSize/2, h/2, -l/2 + pSize/2]); 
 
     const slatH = 0.12; const slatGap = 0.04; const step = slatH + slatGap;
     const numSlats = Math.floor((h - 0.05) / step);
@@ -485,9 +492,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
       <gridHelper args={[150, 150, '#3a3a3a', '#555555']} position={[0, -0.02, 0]} />
       <ContactShadows resolution={1024} scale={25} blur={2.5} opacity={0.7} far={10} color="#000000" position={[0, 0, 0]} />
       
-      {/* MAGIA: Przesuwamy cały kompleks tak, aby wirtualny środek (garaż + wiata) był idealnie na kamerze */}
       <group name="garageModelGroup" position={[-centerX, 0, 0]}>
-        
         {showCornerFlashings && (
           <>
             {renderCornerTrim(-w/2 + t/2, l/2 - t/2, getH(-w/2, l/2))}
@@ -497,7 +502,6 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
           </>
         )}
 
-        {/* GARAŻ GŁÓWNY (Jego współrzędne wewnątrz grupy pozostają bez zmian) */}
         <group>
           <mesh position={[0, 0, l / 2 - t]} castShadow receiveShadow><Geometry><Base><extrudeGeometry args={[createGarageFrontShape(), wallExtrude]} /></Base>{getSubtractions('front')}</Geometry>{wallMaterialComponent}</mesh>
           {renderElements('front', [0, 0, l / 2 - t], 0)}
@@ -514,9 +518,7 @@ export default function GarageModel({ config, colors = [] }: GarageModelProps) {
           {renderRoof()}
         </group>
 
-        {/* NOWY ELEMENT: WIATA */}
         {renderCarport()}
-
       </group>
     </>
   );
