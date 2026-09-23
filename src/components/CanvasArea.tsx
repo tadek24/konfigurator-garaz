@@ -25,7 +25,6 @@ function CameraRig({ selectedWall, config, activeDimId }: { selectedWall: WallFa
     const l = config.length * 0.01; 
     const h = config.height * 0.01;
     
-    // Obliczamy przesunięcie środka garażu, jeśli dodano wiatę
     let groupOffsetX = 0;
     if (config.hasCarport && config.carportWidth) {
       const cw_m = config.carportWidth * 0.01;
@@ -76,7 +75,6 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
   const wallW = (el.wall === 'front' || el.wall === 'back') ? w : l;
   const elW = el.width / 100; const elH = el.height / 100; const elX = el.x / 100; const elY = el.y / 100;
 
-  // Przesunięcie nakładki 3D względem globalnego środka, jeśli wiata przesuwa garaż
   let groupOffsetX = 0;
   if (config.hasCarport && config.carportWidth) {
     const cw = config.carportWidth / 100;
@@ -98,11 +96,14 @@ function DimensionsOverlay({ config, activeId }: { config: GarageConfig, activeI
   else if (el.wall === 'left') { pos = [-w/2 - offset + groupOffsetX, elY + elH/2, elX]; rot = [0, -Math.PI/2, 0]; }
   else if (el.wall === 'right') { pos = [w/2 + offset + groupOffsetX, elY + elH/2, -elX]; rot = [0, Math.PI/2, 0]; }
 
+  // ODWROTNY FORMAT WYMIARÓW DLA ARCHITEKTURY
+  const labelText = `${el.height} x ${el.width} cm`;
+
   return (
     <group position={pos} rotation={rot}>
       <mesh><planeGeometry args={[elW, elH]} /><meshBasicMaterial color="#ea580c" transparent opacity={0.3} depthTest={false} side={THREE.DoubleSide} /><Edges color="#ea580c" scale={1} /></mesh>
       <Html center position={[0, 0, 0]} zIndexRange={[100, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="bg-zinc-900 text-white px-3 py-1.5 rounded-lg border-2 border-orange-500 shadow-2xl flex flex-col items-center whitespace-nowrap animate-bounce-in"><span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">Wymiary Otworu</span><span className="text-lg font-black">{el.width} x {el.height} cm</span></div>
+        <div className="bg-zinc-900 text-white px-3 py-1.5 rounded-lg border-2 border-orange-500 shadow-2xl flex flex-col items-center whitespace-nowrap animate-bounce-in"><span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">Wymiary Otworu</span><span className="text-lg font-black">{labelText}</span></div>
       </Html>
       <MeasurementArrow start={[-elW/2, 0, 0]} end={[-elW/2 - gapLeft, 0, 0]} value={Math.round(gapLeft * 100)} />
       <MeasurementArrow start={[elW/2, 0, 0]} end={[elW/2 + gapRight, 0, 0]} value={Math.round(gapRight * 100)} />

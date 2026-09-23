@@ -95,6 +95,12 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     const area = (config.width / 100) * (config.length / 100);
     totalBase += area * baseM2Price;
 
+    // NOWE: Wycena Wiaty Zintegrowanej na m2
+    if (config.hasCarport && config.carportWidth) {
+      const carportArea = (config.carportWidth / 100) * (config.length / 100);
+      totalBase += carportArea * safeNum(pricing.integrated_carport_m2_v);
+    }
+
     if (config.gutters) {
       let gutterMeters = 0;
       if (config.roofType === 'dual-slope') gutterMeters = (config.length / 100) * 2; 
@@ -109,8 +115,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       }
       if (el.type === 'window' || el.type === 'pvc-window') {
         if (el.width === 80 && el.height === 60) totalBase += safeNum(pricing.win_80x60);
-        else if (el.width === 180 && el.height === 40) totalBase += safeNum(pricing.win_40x180);
-        else if (el.width === 180 && el.height === 60) totalBase += safeNum(pricing.win_60x180);
+        else if (el.width === 40 && el.height === 180) totalBase += safeNum(pricing.win_40x180);
+        else if (el.width === 60 && el.height === 180) totalBase += safeNum(pricing.win_60x180);
       }
       if (el.type === 'gate') {
         if (el.gateType === 'up-and-over') {
@@ -122,6 +128,15 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           if (el.width === 300) totalBase += safeNum(pricing.gate_sec_3x2);
           else if (el.width === 400) totalBase += safeNum(pricing.gate_sec_4x2);
           else if (el.width === 500) totalBase += safeNum(pricing.gate_sec_5x2);
+        } else if (el.gateType === 'swing') {
+          // NOWE: Bramy dwuskrzydłowe
+          if (el.width === 300) totalBase += safeNum(pricing.gate_double_3x2);
+          else if (el.width === 400) totalBase += safeNum(pricing.gate_double_4x2);
+        }
+        
+        // NOWE: Dopłata za drzwi w bramie
+        if ((el as any).hasDoor) {
+          totalBase += safeNum(pricing.door_in_gate_v);
         }
       }
       if (el.type === 'door') {
@@ -146,7 +161,12 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
         else percentFinalMultiplier += (safeNum(pricing.flash_roof_v)/100);
     }
 
-    const activeColors = [config.wallColor, config.roofColor, config.gateColor, config.cornerFlashingColor, config.roofFlashingColor, config.gutterColor];
+    // Dodane wycenianie nowo przypisanych kolorów (okna i drzwi)
+    const activeColors = [
+      config.wallColor, config.roofColor, config.gateColor, 
+      config.doorColor, config.windowColor, 
+      config.cornerFlashingColor, config.roofFlashingColor, config.gutterColor
+    ];
     const uniqueColors = Array.from(new Set(activeColors));
     let hasWoodColor = false;
 
@@ -167,7 +187,10 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       const addon = customAddons.find((a: any) => a.id === addonId);
       if (addon) {
         if (addon.type === 'fixed') customAddonTotal += safeNum(addon.price);
-        if (addon.type === 'pct') percentFinalMultiplier += (safeNum(addon.price) / 100);
+        else if (addon.type === 'pct' || addon.type === 'pct_total') percentFinalMultiplier += (safeNum(addon.price) / 100);
+        else if (addon.type === 'pct_base') percentBaseMultiplier += (safeNum(addon.price) / 100);
+        else if (addon.type === 'm2') customAddonTotal += area * safeNum(addon.price);
+        else if (addon.type === 'mb') customAddonTotal += ((config.width / 100) + (config.length / 100)) * 2 * safeNum(addon.price);
       }
     });
 
@@ -182,6 +205,8 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
       if (key === 'applyColorToAll' && value === true) {
         next.roofColor = prev.wallColor;
         next.gateColor = prev.wallColor;
+        next.doorColor = prev.wallColor;
+        next.windowColor = prev.wallColor;
         next.cornerFlashingColor = prev.wallColor;
         next.roofFlashingColor = prev.wallColor;
         next.gutterColor = prev.wallColor;
@@ -196,7 +221,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     if (config.applyColorToAll) {
       setConfig(prev => ({
         ...prev,
-        wallColor: colorId, roofColor: colorId, gateColor: colorId, cornerFlashingColor: colorId, roofFlashingColor: colorId, gutterColor: colorId
+        wallColor: colorId, roofColor: colorId, gateColor: colorId, doorColor: colorId, windowColor: colorId, cornerFlashingColor: colorId, roofFlashingColor: colorId, gutterColor: colorId
       }));
     } else {
       updateConfig(activeColorEdit as keyof GarageConfig, colorId as any);
@@ -242,7 +267,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
     } else { alert("Brak miejsca na tej ścianie!"); }
   };
 
-  const updateElement = (id: string, updates: Partial<GarageElement>) => {
+  const updateElement = (id: string, updates: Partial<GarageElement & {hasDoor?: boolean}>) => {
     if (isReadOnly && !updates.hasOwnProperty('isOpen')) return; 
 
     setConfig(prev => {
@@ -253,7 +278,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           const pos = findValidPosition(updated, prev.elements, wallWidth, prev.height);
           if (!pos && (updates.x !== undefined || updates.y !== undefined || updates.width !== undefined || updates.height !== undefined)) return el; 
           if (pos && (updates.x !== undefined || updates.y !== undefined)) { if (pos.x !== updated.x || pos.y !== updated.y) return el; }
-          return updated;
+          return updated as GarageElement;
         }
         return el;
       });
@@ -267,7 +292,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
   }
   
   const gates = config.elements.filter(e => e.type === 'gate');
-  const maxGateHeight = config.roofType === 'slope-front' ? config.height - 30 : config.height;
 
   const handleCheckout = () => {
     if (isReadOnly) return;
@@ -363,7 +387,7 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
       <Section title="Wymiary Główne" icon={<Maximize size={20} />}>
         <div className="space-y-6">
-          {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: `Wysokość (Dopłata +10% za każde 10cm powyżej ${appData?.baseConfig?.h || 210}cm)`, key: 'height' as const, min: 200, max: 350, step: 10 }].map(dim => (
+        {[{ label: 'Szerokość', key: 'width' as const, min: 200, max: 800, step: 10 }, { label: 'Długość', key: 'length' as const, min: 300, max: 1000, step: 10 }, { label: 'Wysokość', key: 'height' as const, min: 200, max: 350, step: 10 }].map(dim => (
             <div key={dim.key}>
               <div className="flex justify-between mb-2 text-sm font-semibold text-zinc-700"><label>{dim.label}</label><span className="bg-white px-2 py-1 rounded border text-[var(--theme)] font-bold">{config[dim.key]} cm</span></div>
               {!isReadOnly && <input type="range" min={dim.min} max={dim.max} step={dim.step} value={config[dim.key]} onChange={(e) => updateConfig(dim.key, Number(e.target.value))} className="w-full" style={{accentColor: 'var(--theme)'}} />}
@@ -443,16 +467,19 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 const nType = e.target.value as GateType;
                 let nWidth = gate.width;
                 if (nType === 'sectional' && nWidth < 300) nWidth = 300;
+                if (nType === 'swing' && nWidth < 300) nWidth = 300;
                 setSelectedWall('front'); 
-                updateElement(gate.id, { gateType: nType, width: nWidth, height: 200, isOpen: false }); 
-              }} className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50 disabled:opacity-80">
-                <option value="up-and-over">Uchylna</option><option value="sectional">Segmentowa</option>
+                updateElement(gate.id, { gateType: nType, width: nWidth, height: 200, isOpen: false, hasDoor: false }); 
+              }} className="text-sm border-zinc-300 rounded-lg p-1 bg-zinc-50 text-zinc-900 font-bold disabled:opacity-80">
+                <option value="up-and-over">Uchylna</option>
+                <option value="sectional">Segmentowa</option>
+                <option value="swing">Dwuskrzydłowa</option>
               </select>
             </div>
             
             <div className="space-y-4 mb-3">
-              <div className="mb-2">
-                <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Wymiar Bramy (Wysokość x Szerokość)</label>
+            <div className="mb-2">
+                <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Wymiar Bramy (Wys x Szer)</label>
                 <select 
                   disabled={isReadOnly}
                   value={`${gate.width}x${gate.height}`}
@@ -460,22 +487,38 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                     const [w, h] = e.target.value.split('x').map(Number); 
                     updateElement(gate.id, { width: w, height: h }); 
                   }}
-                  className="w-full border-zinc-300 rounded-lg p-2 text-sm bg-zinc-50 disabled:opacity-80"
+                  className="w-full border-zinc-300 rounded-lg p-2 text-sm bg-zinc-50 text-zinc-900 font-bold disabled:opacity-80 focus:ring-2 focus:ring-[var(--theme)]"
                 >
-                  {gate.gateType === 'up-and-over' ? (
-                    <>
-                      <option value="200x200" disabled={config.width < 200 + 10}>Wys: 200 x Szer: 200 cm</option>
-                      <option value="300x200" disabled={config.width < 300 + 10}>Wys: 200 x Szer: 300 cm</option>
-                      <option value="400x200" disabled={config.width < 400 + 10}>Wys: 200 x Szer: 400 cm</option>
-                      <option value="500x200" disabled={config.width < 500 + 10}>Wys: 200 x Szer: 500 cm</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="300x200" disabled={config.width < 300 + 10}>Wys: 200 x Szer: 300 cm</option>
-                      <option value="400x200" disabled={config.width < 400 + 10}>Wys: 200 x Szer: 400 cm</option>
-                      <option value="500x200" disabled={config.width < 500 + 10}>Wys: 200 x Szer: 500 cm</option>
-                    </>
-                  )}
+                  {(() => {
+                    const otherGatesWidth = config.elements.filter(e => e.wall === gate.wall && e.id !== gate.id).reduce((sum, e) => sum + e.width + 20, 0);
+                    const availableWidth = config.width - otherGatesWidth;
+                    
+                    if (gate.gateType === 'up-and-over') {
+                      return (
+                        <>
+                          <option value="200x200" disabled={200 + 20 > availableWidth}>Wys: 200 x Szer: 200 cm</option>
+                          <option value="300x200" disabled={300 + 20 > availableWidth}>Wys: 200 x Szer: 300 cm</option>
+                          <option value="400x200" disabled={400 + 20 > availableWidth}>Wys: 200 x Szer: 400 cm</option>
+                          <option value="500x200" disabled={500 + 20 > availableWidth}>Wys: 200 x Szer: 500 cm</option>
+                        </>
+                      );
+                    } else if (gate.gateType === 'swing') {
+                      return (
+                        <>
+                          <option value="300x200" disabled={300 + 20 > availableWidth}>Wys: 200 x Szer: 300 cm</option>
+                          <option value="400x200" disabled={400 + 20 > availableWidth}>Wys: 200 x Szer: 400 cm</option>
+                        </>
+                      );
+                    } else {
+                      return (
+                        <>
+                          <option value="300x200" disabled={300 + 20 > availableWidth}>Wys: 200 x Szer: 300 cm</option>
+                          <option value="400x200" disabled={400 + 20 > availableWidth}>Wys: 200 x Szer: 400 cm</option>
+                          <option value="500x200" disabled={500 + 20 > availableWidth}>Wys: 200 x Szer: 500 cm</option>
+                        </>
+                      );
+                    }
+                  })()}
                 </select>
               </div>
               
@@ -486,6 +529,22 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                 </div>
                 {!isReadOnly && <input type="range" min={-(config.width / 2) + gate.width/2} max={(config.width / 2) - gate.width/2} step={5} value={gate.x} onChange={(e) => updateElement(gate.id, { x: Number(e.target.value) })} className="w-full" style={{accentColor: 'var(--theme)'}} />}
               </div>
+
+              {/* Dodatkowe drzwi w bramie */}
+              {(gate.gateType === 'up-and-over' || gate.gateType === 'swing') && (
+                <div className="mt-2 pt-2 border-t border-zinc-100">
+                  <label className={`flex items-center gap-2 text-xs font-bold text-zinc-600 ${isReadOnly ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
+                    <input 
+                      type="checkbox" 
+                      disabled={isReadOnly} 
+                      checked={(gate as any).hasDoor || false} 
+                      onChange={(e) => updateElement(gate.id, { hasDoor: e.target.checked })} 
+                      className="w-4 h-4 rounded text-[var(--theme)] focus:ring-[var(--theme)]" 
+                    />
+                    Dodatkowe drzwi w bramie (+{safeNum(pricing.door_in_gate_v)} zł)
+                  </label>
+                </div>
+              )}
             </div>
 
             <div className="mt-4 pt-3 border-t border-zinc-100">
@@ -549,9 +608,9 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                   </div>
 
                   <div className="space-y-4">
-                    {(el.type === 'window' || el.type === 'pvc-window') ? (
+                  {(el.type === 'window' || el.type === 'pvc-window') ? (
                       <div className="mb-2">
-                        <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Wymiar Okna (Wysokość x Szerokość)</label>
+                        <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">Wymiar Okna (Wys x Szer)</label>
                         <select 
                           disabled={isReadOnly}
                           value={`${el.width}x${el.height}`}
@@ -559,11 +618,19 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
                             const [w, h] = e.target.value.split('x').map(Number); 
                             updateElement(el.id, { width: w, height: h }); 
                           }}
-                          className="w-full border-zinc-300 rounded-lg p-2 text-sm bg-zinc-50 disabled:opacity-80"
+                          className="w-full border-zinc-300 rounded-lg p-2 text-sm bg-zinc-50 text-zinc-900 font-bold disabled:opacity-80 focus:ring-2 focus:ring-[var(--theme)]"
                         >
-                          <option value="80x60" disabled={wallW < 80 || config.height < 60 + 20}>Wys: 60 x Szer: 80 cm</option>
-                          <option value="180x40" disabled={wallW < 180 || config.height < 40 + 20}>Wys: 40 x Szer: 180 cm</option>
-                          <option value="180x60" disabled={wallW < 180 || config.height < 60 + 20}>Wys: 60 x Szer: 180 cm</option>
+                          {(() => {
+                            const otherElemsWidth = config.elements.filter(e => e.wall === el.wall && e.id !== el.id).reduce((sum, e) => sum + e.width + 20, 0);
+                            const availableWidth = wallW - otherElemsWidth;
+                            return (
+                              <>
+                                <option value="80x60" disabled={availableWidth < 80 + 20 || config.height < 60 + 20}>Wys: 60 x Szer: 80 cm</option>
+                                <option value="40x180" disabled={availableWidth < 40 + 20 || config.height < 180 + 20}>Wys: 180 x Szer: 40 cm</option>
+                                <option value="60x180" disabled={availableWidth < 60 + 20 || config.height < 180 + 20}>Wys: 180 x Szer: 60 cm</option>
+                              </>
+                            );
+                          })()}
                         </select>
                       </div>
                     ) : el.type === 'skylight' ? (
@@ -632,7 +699,6 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
               <input type="checkbox" disabled={isReadOnly} checked={config.extraOptions?.includes('roofTile')} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), 'roofTile'] : (config.extraOptions || []).filter(x => x !== 'roofTile'); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)] disabled:opacity-50" />
               <span className="text-sm font-semibold text-zinc-700">Dach: Blachodachówka</span>
             </div>
-            {/* JEDNOSTKA UKRYTA - OBLICZA DOKŁADNĄ KWOTĘ W LOKALNYM ZAKRESIE */}
             <span className="text-xs font-bold text-[var(--theme)] bg-[var(--theme)]/10 px-2 py-1 rounded">
               +{Math.round((config.width / 100) * (config.length / 100) * safeNum(pricing.roof_tile_v))} zł
             </span>
@@ -670,13 +736,18 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
 
           {customAddons.map((opt: any) => {
             const isActive = (config.extraOptions || []).includes(opt.id);
+            let priceLabel = `+${safeNum(opt.price)} zł`;
+            if (opt.type === 'pct' || opt.type === 'pct_total' || opt.type === 'pct_base') priceLabel = `+${safeNum(opt.price)}%`;
+            else if (opt.type === 'm2') priceLabel = `+${safeNum(opt.price)} zł / m²`;
+            else if (opt.type === 'mb') priceLabel = `+${safeNum(opt.price)} zł / mb`;
+
             return (
               <label key={opt.id} className={`flex items-center justify-between p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors bg-white shadow-sm ${isReadOnly ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}>
                 <div className="flex items-center gap-3">
                   <input type="checkbox" disabled={isReadOnly} checked={isActive} onChange={(e) => { const next = e.target.checked ? [...(config.extraOptions || []), opt.id] : (config.extraOptions || []).filter(x => x !== opt.id); updateConfig('extraOptions' as any, next); }} className="w-5 h-5 rounded border-zinc-300 text-[var(--theme)] focus:ring-[var(--theme)] disabled:opacity-50" />
                   <span className="text-sm font-semibold text-zinc-700">{opt.label}</span>
                 </div>
-                <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">{opt.type === 'pct' ? `+${safeNum(opt.price)}%` : `+${safeNum(opt.price)} zł`}</span>
+                <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded">{priceLabel}</span>
               </label>
             );
           })}
@@ -719,8 +790,10 @@ export default function ConfigPanel({ config, setConfig, selectedWall, setSelect
           <div className="p-2 flex flex-col">
             {[
               { label: 'Kolor ścian', key: 'wallColor' },
-              { label: 'Brama', key: 'gateColor' },
               { label: 'Kolor dachu', key: 'roofColor' },
+              { label: 'Brama', key: 'gateColor' },
+              { label: 'Kolor drzwi', key: 'doorColor' },
+              { label: 'Kolor okien', key: 'windowColor' },
               { label: 'Kolor rynien', key: 'gutterColor' },
               { label: 'Obróbki narożne', key: 'cornerFlashingColor' },
               { label: 'Obróbki dachu', key: 'roofFlashingColor' },

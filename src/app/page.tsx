@@ -42,7 +42,7 @@ const INITIAL_CONFIG: GarageConfig = {
 };
 
 const FALLBACK_DATA = {
-  storeUrl: "https://konfigurator.skillup-szkolenia.pl", themeColor: "#ea580c",
+  storeUrl: "https://gard-house.pl", themeColor: "#ea580c",
   baseConfig: { w: 300, l: 500, h: 210, p: 5000 },
   pricing: { 
     sqm_t: 'fixed', sqm_v: 150, door_t: 'fixed', door_v: 500, window_t: 'fixed', window_v: 300, skylight_t: 'fixed', skylight_v: 150, 
@@ -102,7 +102,7 @@ export default function Home() {
         console.error("Błąd dekodowania BIM:", e); 
       }
     }
-  }, []);
+  }, []); 
 
   const handleScroll = (e: UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
